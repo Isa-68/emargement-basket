@@ -115,19 +115,32 @@ async function ensureSession(){
  if(r.error)throw r.error;s=r.data;sessions.push(s);return s;
 }
 
+function mergeAttendance(rows){
+  for(const row of rows||[]){
+    const i=attendance.findIndex(a=>a.session_id===row.session_id&&a.player_id===row.player_id);
+    if(i>=0) attendance[i]=row; else attendance.push(row);
+  }
+}
 async function setStatus(pid,status){
  try{
   const s=await ensureSession(), old=markFor(pid);
-  const r=await db.from('attendance').upsert({session_id:s.id,player_id:pid,status,late:status==='present'?(old?.late||false):false,updated_at:new Date().toISOString()},{onConflict:'session_id,player_id'});
-  if(r.error)throw r.error;await load();
- }catch(e){alert('Erreur : '+e.message)}
+  const payload={session_id:s.id,player_id:pid,status,late:status==='present'?(old?.late||false):false,updated_at:new Date().toISOString()};
+  const r=await db.from('attendance').upsert(payload,{onConflict:'session_id,player_id'}).select().single();
+  if(r.error)throw r.error;
+  mergeAttendance([r.data]);
+  render();
+  sync('✓ Enregistré · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+ }catch(e){console.error(e);alert('Erreur : '+e.message)}
 }
 async function toggleLate(pid){
  try{
   const s=currentSession(), old=markFor(pid);if(!s||!old||old.status!=='present')return;
-  const r=await db.from('attendance').update({late:!old.late,updated_at:new Date().toISOString()}).eq('id',old.id);
-  if(r.error)throw r.error;await load();
- }catch(e){alert('Erreur : '+e.message)}
+  const r=await db.from('attendance').update({late:!old.late,updated_at:new Date().toISOString()}).eq('id',old.id).select().single();
+  if(r.error)throw r.error;
+  mergeAttendance([r.data]);
+  render();
+  sync('✓ Enregistré · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+ }catch(e){console.error(e);alert('Erreur : '+e.message)}
 }
 
 function render(){
@@ -177,33 +190,31 @@ async function markAllPresent(){
 
     const s=await ensureSession();
     const now=new Date().toISOString();
-
-    // Use the same operation as an individual attendance mark, but for
-    // every player. This keeps the database logic identical to the working
-    // individual buttons.
-    for(let i=0;i<players.length;i++){
-      const p=players[i];
+    const rows=players.map(p=>{
       const old=markFor(p);
-      const r=await db.from('attendance').upsert({
+      return {
         session_id:s.id,
         player_id:p.id,
         status:'present',
         late:old?.status==='present' ? Boolean(old.late) : false,
         updated_at:now
-      },{onConflict:'session_id,player_id'});
-      if(r.error) throw r.error;
-    }
+      };
+    });
 
-    await load();
+    // One single request to Supabase for the whole team.
+    const r=await db.from('attendance').upsert(rows,{onConflict:'session_id,player_id'}).select();
+    if(r.error)throw r.error;
+    mergeAttendance(r.data);
+    render();
     btn.textContent='✅ Présentes : '+players.length;
-    setTimeout(()=>{btn.textContent='✅ Tout le monde présent'},1500);
+    sync('✓ '+players.length+' présences enregistrées');
+    setTimeout(()=>{btn.textContent='✅ Tout le monde présent';btn.disabled=false},1500);
   }catch(e){
     console.error(e);
     alert('Erreur lors de l’enregistrement : '+(e?.message||String(e)));
     sync('Erreur');
-  }finally{
     btn.disabled=false;
-    if(!btn.textContent.startsWith('✅ Présentes :')) btn.textContent='✅ Tout le monde présent';
+    btn.textContent='✅ Tout le monde présent';
   }
 }
 
