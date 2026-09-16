@@ -36,7 +36,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:7px;borde
 <script>
 const URL='https://roqfjstasmlcfasmzjdk.supabase.co';
 const KEY='sb_publishable_4dyWekEBF7mttdHt_6PqXw_mN-Mu4tA';
-const db=supabase.createClient(URL,KEY);
+if(!window.supabase){ document.body.innerHTML='<div style="max-width:600px;margin:60px auto;padding:20px;font-family:Arial"><h2>Problème de chargement</h2><p>La bibliothèque de connexion n\'a pas été chargée. Rechargez la page avec Ctrl+F5.</p></div>'; throw new Error('Supabase JS library not loaded'); }
+const db=window.supabase.createClient(URL,KEY);
 let teamCode='U11F',teamId=null,players=[],sessions=[],marks=[];
 let selectedDate=new Date().toISOString().slice(0,10);
 const $=id=>document.getElementById(id); $('date').value=selectedDate;
