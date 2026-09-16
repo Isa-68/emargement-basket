@@ -77,7 +77,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 5px;b
 const SUPABASE_URL='https://roqfjstasmlcfasmzjdk.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4dyWekEBF7mttdHt_6PqXw_mN-Mu4tA';
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-let current='U11F', teams={}, players=[], sessions=[], attendance=[], started=false;
+let current='U11F', teams={}, players=[], sessions=[], attendance=[], started=false, saving=false;
 const $=id=>document.getElementById(id);
 $('date').value=new Date().toISOString().slice(0,10);
 
@@ -89,6 +89,7 @@ function sortPlayers(){players.sort((a,b)=>a.name.localeCompare(b.name,'fr',{sen
 function sync(text){$('sync').textContent=text}
 
 async function load(){
+ if(saving)return;
  sync('Synchronisation…');
  const t=await db.from('teams').select('*').order('code');
  if(t.error){sync('Erreur de connexion');console.error(t.error);return}
@@ -122,28 +123,54 @@ function mergeAttendance(rows){
   }
 }
 async function setStatus(pid,status){
+ if(saving)return;
+ saving=true;
  try{
-  const s=await ensureSession(), old=markFor(pid);
-  const payload={session_id:s.id,player_id:pid,status,late:status==='present'?(old?.late||false):false,updated_at:new Date().toISOString()};
+  const s=await ensureSession();
+  const old=markFor(pid);
+  const payload={
+    session_id:s.id,
+    player_id:pid,
+    status,
+    late:status==='present' ? Boolean(old?.late) : false,
+    updated_at:new Date().toISOString()
+  };
   const r=await db.from('attendance').upsert(payload,{onConflict:'session_id,player_id'});
   if(r.error)throw r.error;
-  const saved={...payload,id:old?.id};
-  mergeAttendance([saved]);
+
+  mergeAttendance([{...payload,id:old?.id}]);
   render();
   sync('✓ Enregistré · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
- }catch(e){console.error(e);alert('Erreur : '+e.message)}
+ }catch(e){
+  console.error(e);
+  alert('Erreur : '+(e?.message||String(e)));
+  await load();
+ }finally{
+  saving=false;
+ }
 }
 async function toggleLate(pid){
+ if(saving)return;
+ saving=true;
  try{
-  const s=currentSession(), old=markFor(pid);if(!s||!old||old.status!=='present')return;
-  const r=await db.from('attendance').update({late:!old.late,updated_at:new Date().toISOString()}).eq('id',old.id).select().single();
+  const s=currentSession(), old=markFor(pid);
+  if(!s||!old||old.status!=='present')return;
+  const r=await db.from('attendance')
+    .update({late:!old.late,updated_at:new Date().toISOString()})
+    .eq('id',old.id);
   if(r.error)throw r.error;
-  mergeAttendance([r.data]);
+
+  old.late=!old.late;
   render();
   sync('✓ Enregistré · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
- }catch(e){console.error(e);alert('Erreur : '+e.message)}
+ }catch(e){
+  console.error(e);
+  alert('Erreur : '+(e?.message||String(e)));
+  await load();
+ }finally{
+  saving=false;
+ }
 }
-
 function render(){
  sortPlayers();const s=currentSession(),vals=players.map(p=>markFor(p)?.status),count=x=>vals.filter(v=>v===x).length;
  $('sessionTitle').textContent=current+' — Émargement';
@@ -179,46 +206,60 @@ async function switchTeam(t){current=t;$('u11').classList.toggle('on',t==='U11F'
 $('u11').onclick=()=>switchTeam('U11F');$('u18').onclick=()=>switchTeam('U18F');
 $('add').onclick=async()=>{const n=$('newName').value.trim();if(!n)return;const r=await db.from('players').insert({team_id:teamId(),name:n});if(r.error)alert('Erreur : '+r.error.message);else{$('newName').value='';await load()}};
 async function markAllPresent(){
-  const btn=$('allPresentBtn');
-  if(!players.length){
-    alert('Aucune joueuse dans cette équipe.');
-    return;
-  }
-  try{
-    btn.disabled=true;
-    btn.textContent='⏳ Enregistrement…';
-    sync('Enregistrement des présences…');
+ const btn=$('allPresentBtn');
+ if(!players.length){
+  alert('Aucune joueuse dans cette équipe.');
+  return;
+ }
+ if(saving)return;
 
-    const s=await ensureSession();
-    const now=new Date().toISOString();
-    const rows=players.map(p=>{
-      const old=markFor(p);
-      return {
-        session_id:s.id,
-        player_id:p.id,
-        status:'present',
-        late:old?.status==='present' ? Boolean(old.late) : false,
-        updated_at:now
-      };
-    });
+ saving=true;
+ btn.disabled=true;
+ btn.textContent='⏳ Enregistrement…';
+ sync('Enregistrement des présences…');
 
-    // One single request to Supabase for the whole team.
-    const r=await db.from('attendance').upsert(rows,{onConflict:'session_id,player_id'});
-    if(r.error)throw r.error;
-    mergeAttendance(rows.map(x=>({...x,id:markFor(x.player_id)?.id})));
-    render();
-    btn.textContent='✅ Présentes : '+players.length;
-    sync('✓ '+players.length+' présences enregistrées');
-    setTimeout(()=>{btn.textContent='✅ Tout le monde présent';btn.disabled=false},1500);
-  }catch(e){
-    console.error(e);
-    alert('Erreur lors de l’enregistrement : '+(e?.message||String(e)));
-    sync('Erreur');
+ try{
+  const s=await ensureSession();
+  const now=new Date().toISOString();
+  const rows=players.map(p=>{
+   const old=markFor(p);
+   return {
+    session_id:s.id,
+    player_id:p.id,
+    status:'present',
+    late:old?.status==='present' ? Boolean(old.late) : false,
+    updated_at:now
+   };
+  });
+
+  const r=await db.from('attendance').upsert(rows,{onConflict:'session_id,player_id'});
+  if(r.error)throw r.error;
+
+  rows.forEach(row=>{
+   const old=markFor(row.player_id);
+   mergeAttendance([{...row,id:old?.id}]);
+  });
+
+  render();
+  btn.textContent='✅ Présentes : '+players.length;
+  sync('✓ '+players.length+' présences enregistrées');
+
+  setTimeout(()=>{
+   if(!saving){
     btn.disabled=false;
     btn.textContent='✅ Tout le monde présent';
-  }
+   }
+  },1500);
+ }catch(e){
+  console.error(e);
+  alert('Erreur lors de l’enregistrement : '+(e?.message||String(e)));
+  sync('Erreur');
+  btn.disabled=false;
+  btn.textContent='✅ Tout le monde présent';
+ }finally{
+  saving=false;
+ }
 }
-
 $('date').onchange=render;
 function tab(x){$('pageEm').hidden=x!=='em';$('pageStats').hidden=x!=='stats';$('pageTeam').hidden=x!=='team';$('tabEm').classList.toggle('on',x==='em');$('tabStats').classList.toggle('on',x==='stats');$('tabTeam').classList.toggle('on',x==='team')}
 $('tabEm').onclick=()=>tab('em');$('tabStats').onclick=()=>tab('stats');$('tabTeam').onclick=()=>tab('team');
@@ -232,7 +273,7 @@ async function startAfterLogin(){
   started=true;
   await showApp();
   await load();
-  setInterval(()=>{if(!document.hidden)load()},5000);
+  setInterval(()=>{if(!document.hidden&&!saving)load()},10000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
 }
 
