@@ -23,6 +23,7 @@ button{border:0;border-radius:10px;padding:10px 12px;font-weight:700;cursor:poin
 table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 5px;border-bottom:1px solid #eee;text-align:center}th:first-child,td:first-child{text-align:left}
 .badge{display:inline-block;padding:3px 7px;border-radius:99px;font-weight:700;background:#eef1f5}.good{background:#dcfce7}.mid{background:#fef3c7}.low{background:#fee2e2}
 @media(max-width:470px){.row{grid-template-columns:minmax(105px,1fr) repeat(4,39px) 36px;gap:4px}.st{width:39px}.late{width:36px}.summary{gap:4px}.stat{padding:7px 2px}}
+#app{display:none} #app.visible{display:block}
 </style>
 </head>
 <body>
@@ -38,7 +39,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 5px;b
     <div id="loginMsg" class="muted" style="margin-top:10px"></div>
   </div>
 </div>
-<div id="app" hidden>
+<div id="app" style="display:none">
 <header>
 <h1>🏀 Émargement Basket</h1>
 <div class="teams"><button class="team on" id="u11">U11F</button><button class="team" id="u18">U18F</button></div>
@@ -151,11 +152,15 @@ $('add').onclick=async()=>{const n=$('newName').value.trim();if(!n)return;const 
 $('date').onchange=render;$('kind').onchange=render;
 function tab(x){$('pageEm').hidden=x!=='em';$('pageStats').hidden=x!=='stats';$('pageTeam').hidden=x!=='team';$('tabEm').classList.toggle('on',x==='em');$('tabStats').classList.toggle('on',x==='stats');$('tabTeam').classList.toggle('on',x==='team')}
 $('tabEm').onclick=()=>tab('em');$('tabStats').onclick=()=>tab('stats');$('tabTeam').onclick=()=>tab('team');
+async function showApp(){
+  $('loginScreen').style.display='none';
+  $('app').classList.add('visible');
+}
+
 async function startAfterLogin(){
   if(started)return;
   started=true;
-  $('loginScreen').hidden=true;
-  $('app').hidden=false;
+  await showApp();
   await load();
   setInterval(()=>{if(!document.hidden)load()},5000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
@@ -171,15 +176,13 @@ $('loginForm').addEventListener('submit', async (e)=>{
   $('loginBtn').disabled=true;
   $('loginBtn').textContent='Connexion…';
   $('loginMsg').textContent='';
+  $('loginMsg').style.color='';
   try{
     const r=await db.auth.signInWithPassword({email,password});
     if(r.error) throw r.error;
-    $('loginMsg').textContent='Connexion réussie…';
+    $('loginMsg').textContent='Connexion réussie. Ouverture…';
     $('loginMsg').style.color='#166534';
-    $('app').hidden=false;
-    $('loginScreen').hidden=true;
-    await load();
-    startAfterLogin();
+    await startAfterLogin();
   }catch(e){
     console.error(e);
     $('loginMsg').textContent='Connexion impossible : '+(e?.message||'Erreur inconnue');
@@ -189,11 +192,11 @@ $('loginForm').addEventListener('submit', async (e)=>{
     $('loginBtn').textContent='Se connecter';
   }
 });
-$('logoutBtn').onclick=async()=>{await db.auth.signOut();location.reload()};
 
-db.auth.onAuthStateChange((event, session)=>{
-  if(session && !started) startAfterLogin();
-});
+$('logoutBtn').onclick=async()=>{
+  await db.auth.signOut();
+  location.reload();
+};
 
 (async()=>{
   const r=await db.auth.getSession();
