@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>Émargement équipes JAB</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box}
 body{font-family:Arial,sans-serif;background:#f5f5f5;margin:0;color:#222}
@@ -86,7 +87,7 @@ button{border:0;border-radius:9px;padding:11px 14px;font-size:16px;cursor:pointe
   <div class="card">
     <div class="toolbar">
       <input id="date" class="date" type="date">
-      <button id="allPresent">🟢 Tout le monde présent</button><button id="resetAll" style="background:#ffe0e0;color:#9b0000">🔄 Tout réinitialiser</button>
+      <button id="allPresent">🟢 Tout le monde présent</button><button id="resetAll" style="background:#ffe0e0;color:#9b0000;display:none">🔄 Tout réinitialiser</button>
     </div>
     <p id="sessionMsg" class="muted"></p><p class="muted">Le bouton « Tout réinitialiser » supprime les entraînements et émargements de test des deux équipes. Une nouvelle séance ne sera créée que lors du premier enregistrement.</p>
   </div>
@@ -105,6 +106,7 @@ button{border:0;border-radius:9px;padding:11px 14px;font-size:16px;cursor:pointe
   <div id="statsView" class="view">
     <div class="card">
       <h2>Statistiques de l'équipe</h2>
+      <button id="exportExcel" class="primary" style="margin-bottom:12px">📥 Exporter les statistiques Excel</button>
       <div id="teamStats"></div>
     </div>
     <div class="card">
@@ -131,13 +133,16 @@ const STATUS = {
 const TEAM_ACCESS = {
   "maite.schneider@wanadoo.fr": ["U18F"]
 };
+const ADMIN_EMAIL = "ii_firm@yahoo.fr";
 
 let allowedTeams = ["U11F", "U18F"];
+let isAdmin = false;
 
 async function applyAccess(){
   const result = await db.auth.getUser();
   const email = (result.data && result.data.user && result.data.user.email || "").toLowerCase();
   allowedTeams = TEAM_ACCESS[email] || ["U11F", "U18F"];
+  isAdmin = email === ADMIN_EMAIL;
 
   $("u11Btn").style.display = allowedTeams.includes("U11F") ? "" : "none";
   $("u18Btn").style.display = allowedTeams.includes("U18F") ? "" : "none";
@@ -187,6 +192,7 @@ async function login(){
 async function logout(){
   await db.auth.signOut();
   allowedTeams=["U11F","U18F"];
+  isAdmin=false;
   $("app").style.display="none";
   $("login").style.display="block";
 }
@@ -420,6 +426,10 @@ async function allPresent(){
 
 
 async function resetAll(){
+  if(!isAdmin){
+    msg("Accès réservé à l'administratrice.");
+    return;
+  }
   const ok = confirm(
     "⚠️ RÉINITIALISATION COMPLÈTE\n\n" +
     "Cette action va supprimer TOUS les entraînements et TOUS les émargements " +
@@ -580,6 +590,58 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 }
 
+
+function exportExcel(){
+  if(!team || typeof XLSX === "undefined"){
+    msg("Export Excel indisponible.");
+    return;
+  }
+
+  const teamName=team.code || "Equipe";
+  const sessionsRows=allSessions.map(s=>{
+    const mine=allAttendance.filter(a=>a.session_id===s.id);
+    return {
+      "Date": s.session_date.split("-").reverse().join("/"),
+      "Présentes": mine.filter(a=>a.status==="present").length,
+      "Absences non excusées": mine.filter(a=>a.status==="absent").length,
+      "Absences excusées": mine.filter(a=>a.status==="excused").length,
+      "Absences blessées": mine.filter(a=>a.status==="injured").length,
+      "Joueuses émargées": mine.length,
+      "Total joueuses": players.length
+    };
+  });
+
+  const playerRows=players.map(p=>{
+    const mine=allAttendance.filter(a=>a.player_id===p.id);
+    const pres=mine.filter(a=>a.status==="present").length;
+    const late=mine.filter(a=>a.late).length;
+    const abs=mine.filter(a=>a.status==="absent").length;
+    const exc=mine.filter(a=>a.status==="excused").length;
+    const inj=mine.filter(a=>a.status==="injured").length;
+    const pct=mine.length ? Math.round(pres/mine.length*1000)/10 : "";
+    return {
+      "Joueuse": p.name,
+      "Séances émargées": mine.length,
+      "Séances totales": allSessions.length,
+      "Présences": pres,
+      "Retards": late,
+      "Absences non excusées": abs,
+      "Absences excusées": exc,
+      "Absences blessées": inj,
+      "% présence": pct==="" ? "" : pct+"%"
+    };
+  });
+
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.json_to_sheet(sessionsRows);
+  const ws2=XLSX.utils.json_to_sheet(playerRows);
+  XLSX.utils.book_append_sheet(wb,ws1,"Entraînements");
+  XLSX.utils.book_append_sheet(wb,ws2,"Assiduité");
+
+  const stamp=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb,`Emargement_${teamName}_${stamp}.xlsx`);
+}
+
 function showView(which){
   $("attendanceView").style.display=which==="attendance"?"block":"none";
   $("statsView").style.display=which==="stats"?"block":"none";
@@ -600,6 +662,7 @@ $("addPlayer").addEventListener("click",addPlayer);
 $("newPlayer").addEventListener("keydown",e=>{if(e.key==="Enter")addPlayer()});
 $("attendanceTab").addEventListener("click",()=>showView("attendance"));
 $("statsTab").addEventListener("click",()=>showView("stats"));
+$("exportExcel").addEventListener("click",exportExcel);
 
 (async()=>{
   const {data}=await db.auth.getSession();
