@@ -17,12 +17,12 @@ button{border:0;border-radius:10px;padding:10px 12px;font-weight:700;cursor:poin
 .muted{color:#687386;font-size:12px}.sync{font-size:11px;color:#cbd5e1;margin-top:5px}
 .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}.stat{text-align:center;background:#f7f8fa;border-radius:11px;padding:8px}.stat b{display:block;font-size:19px}.stat span{font-size:11px}
 .row{display:grid;grid-template-columns:minmax(120px,1fr) repeat(4,43px) 38px;gap:5px;align-items:center;padding:9px 0;border-bottom:1px solid #eee}.name{font-weight:700}
-.st{height:40px;width:43px;padding:0;background:#f1f3f5;font-size:18px;border:2px solid transparent}.st.active.present{background:#dcfce7;border-color:#22c55e}.st.active.absent{background:#fee2e2;border-color:#ef4444}.st.active.excused{background:#fef3c7;border-color:#f59e0b}.st.active.injured{background:#dbeafe;border-color:#3b82f6}
+.st{position:relative;z-index:2;cursor:pointer;height:40px;width:43px;padding:0;background:#f1f3f5;font-size:18px;border:2px solid transparent}.st.active.present{background:#dcfce7;border-color:#22c55e}.st.active.absent{background:#fee2e2;border-color:#ef4444}.st.active.excused{background:#fef3c7;border-color:#f59e0b}.st.active.injured{background:#dbeafe;border-color:#3b82f6}
 .late{height:40px;width:38px;padding:0;background:#fff;border:2px solid #d9dee5;font-size:14px}.late.on{background:#f3e8ff;border-color:#8b5cf6;color:#6d28d9}.late:disabled{opacity:.35}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#687386;margin-top:8px}.item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee}
 table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 5px;border-bottom:1px solid #eee;text-align:center}th:first-child,td:first-child{text-align:left}
 .badge{display:inline-block;padding:3px 7px;border-radius:99px;font-weight:700;background:#eef1f5}.good{background:#dcfce7}.mid{background:#fef3c7}.low{background:#fee2e2}
-@media(max-width:470px){.row{grid-template-columns:minmax(105px,1fr) repeat(4,39px) 36px;gap:4px}.st{width:39px}.late{width:36px}.summary{gap:4px}.stat{padding:7px 2px}}
+@media(max-width:470px){.row{grid-template-columns:minmax(105px,1fr) repeat(4,39px) 36px;gap:4px}.st{position:relative;z-index:2;cursor:pointer;width:39px}.late{width:36px}.summary{gap:4px}.stat{padding:7px 2px}}
 #app{display:none} #app.visible{display:block}
 </style>
 </head>
@@ -51,7 +51,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 5px;b
 
 <section id="pageEm" class="card">
 <div class="bar"><div><b id="sessionTitle">U11F — Émargement</b><div class="muted">R = retard, indépendant du statut.</div></div>
-<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input id="date" type="date"><button id="allPresentBtn" class="primary" type="button">✅ Tout le monde présent</button></div></div>
+<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="muted">Séance</span><input id="date" type="date"><button id="allPresentBtn" class="primary" type="button">✅ Tout le monde présent</button></div></div>
 <div id="summary" class="summary"></div>
 <div class="legend"><span>🟢 Présente</span><span>🔴 Abs. non exc.</span><span>🟡 Abs. exc.</span><span>🔵 Abs. blessée</span><span>R = retard</span></div>
 <div id="players" style="margin-top:6px"></div>
@@ -83,7 +83,7 @@ $('date').value=new Date().toISOString().slice(0,10);
 
 function esc(x){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function teamId(){return teams[current]?.id}
-function currentSession(){return sessions.find(s=>s.session_date===$('date').value&&s.session_type===$('kind').value)}
+function currentSession(){return sessions.find(s=>s.session_date===$('date').value&&s.session_type==='Entraînement')}
 function markFor(pid){const s=currentSession();return s?attendance.find(a=>a.session_id===s.id&&a.player_id===pid):null}
 function sortPlayers(){players.sort((a,b)=>a.name.localeCompare(b.name,'fr',{sensitivity:'base'}))}
 function sync(text){$('sync').textContent=text}
@@ -116,20 +116,40 @@ async function ensureSession(){
 }
 
 async function setStatus(pid,status){
- try{
-  const s=await ensureSession(), old=markFor(pid);
-  const r=await db.from('attendance').upsert({session_id:s.id,player_id:pid,status,late:status==='present'?(old?.late||false):false,updated_at:new Date().toISOString()},{onConflict:'session_id,player_id'});
-  if(r.error)throw r.error;await load();
- }catch(e){alert('Erreur : '+e.message)}
+  try{
+    const session=await ensureSession();
+    const old=markFor(pid);
+    const row={session_id:session.id,player_id:pid,status,late:status==='present' ? Boolean(old?.late) : false,updated_at:new Date().toISOString()};
+    const r=await db.from('attendance').upsert(row,{onConflict:'session_id,player_id'});
+    if(r.error) throw r.error;
+    // Update the local screen immediately. Do not reload the whole app here.
+    const idx=attendance.findIndex(a=>a.session_id===session.id && a.player_id===pid);
+    if(idx>=0) attendance[idx]={...attendance[idx],...row}; else attendance.push(row);
+    render();
+    sync('✓ Enregistré');
+  }catch(e){
+    console.error(e);
+    alert('Erreur : '+(e?.message||String(e)));
+    sync('Erreur');
+  }
 }
 async function toggleLate(pid){
- try{
-  const s=currentSession(), old=markFor(pid);if(!s||!old||old.status!=='present')return;
-  const r=await db.from('attendance').update({late:!old.late,updated_at:new Date().toISOString()}).eq('id',old.id);
-  if(r.error)throw r.error;await load();
- }catch(e){alert('Erreur : '+e.message)}
+  try{
+    const session=currentSession();
+    const old=markFor(pid);
+    if(!session || !old || old.status!=='present') return;
+    const next=!Boolean(old.late);
+    const r=await db.from('attendance').update({late:next,updated_at:new Date().toISOString()}).eq('id',old.id);
+    if(r.error) throw r.error;
+    old.late=next;
+    render();
+    sync('✓ Enregistré');
+  }catch(e){
+    console.error(e);
+    alert('Erreur : '+(e?.message||String(e)));
+    sync('Erreur');
+  }
 }
-
 function render(){
  sortPlayers();const s=currentSession(),vals=players.map(p=>markFor(p)?.status),count=x=>vals.filter(v=>v===x).length;
  $('sessionTitle').textContent=current+' — Émargement';
@@ -137,9 +157,9 @@ function render(){
  const lateCount=players.filter(p=>{const a=markFor(p);return a?.status==='present'&&a?.late}).length;
  const presentCount=count('present');
  const totalPlayers=players.length;
- $('summary').innerHTML=`<div class="stat"><b>${presentCount}</b><span>👥 Présentes / ${totalPlayers}</span></div><div class="stat"><b>${lateCount}</b><span>⏱️ Retards</span></div>`+
+ $('summary').innerHTML=`<div class="stat"><b>${presentCount} / ${totalPlayers}</b><span>👥 Présentes</span></div><div class="stat"><b>${lateCount}</b><span>⏱️ Retards</span></div>`+
  [['absent','Abs. non exc.','🔴'],['excused','Abs. exc.','🟡'],['injured','Abs. blessée','🔵']].map(x=>`<div class="stat"><b>${count(x[0])}</b><span>${x[2]} ${x[1]}</span></div>`).join('');
- $('players').innerHTML=players.length?players.map((p,i)=>{const a=markFor(p),st=a?.status||'';return `<div class="row"><div class="name">${esc(p.name)}</div>${[['present','🟢'],['absent','🔴'],['excused','🟡'],['injured','🔵']].map(x=>`<button class="st ${x[0]} ${st===x[0]?'active':''}" data-i="${i}" data-s="${x[0]}">${x[1]}</button>`).join('')}<button class="late ${a?.late?'on':''}" ${st!=='present'?'disabled':''} data-late="${i}">R</button></div>`}).join(''):'<div class="muted" style="padding:18px 0">Aucune joueuse. Ajoute-les dans « Équipe ».</div>';
+ $('players').innerHTML=players.length?players.map((p,i)=>{const a=markFor(p),st=a?.status||'';return `<div class="row"><div class="name">${esc(p.name)}</div>${[['present','🟢'],['absent','🔴'],['excused','🟡'],['injured','🔵']].map(x=>`<button type="button" class="st ${x[0]} ${st===x[0]?'active':''}" data-i="${i}" data-s="${x[0]}">${x[1]}</button>`).join('')}<button type="button" class="late ${a?.late?'on':''}" ${st!=='present'?'disabled':''} data-late="${i}">R</button></div>`}).join(''):'<div class="muted" style="padding:18px 0">Aucune joueuse. Ajoute-les dans « Équipe ».</div>';
  document.querySelectorAll('.st').forEach(b=>b.onclick=()=>setStatus(players[+b.dataset.i].id,b.dataset.s));
  document.querySelectorAll('[data-late]').forEach(b=>b.onclick=()=>toggleLate(players[+b.dataset.late].id));
  renderStats();renderTeam();
@@ -151,9 +171,9 @@ function renderStats(){
    const present=sessionAtt.filter(a=>a.status==='present').length;
    const late=sessionAtt.filter(a=>a.status==='present'&&a.late).length;
    const label=new Date(s.session_date+'T00:00:00').toLocaleDateString('fr-FR');
-   return `<tr><td>${label}</td><td>${esc(s.session_type)}</td><td><b>${present}</b> / ${players.length}</td><td>${late}</td></tr>`;
+   return `<tr><td>${label}</td><td><b>${present}</b> / ${players.length}</td><td>${late}</td></tr>`;
  }).join('');
- $('sessionStatsBody').innerHTML=sessions.length?`<table><thead><tr><th>Date</th><th>Type</th><th>Présentes</th><th>R</th></tr></thead><tbody>${sessionRows}</tbody></table>`:'<div class="muted">Aucune séance enregistrée.</div>';
+ $('sessionStatsBody').innerHTML=sessions.length?`<table><thead><tr><th>Date</th><th>Présentes</th><th>R</th></tr></thead><tbody>${sessionRows}</tbody></table>`:'<div class="muted">Aucune séance enregistrée.</div>';
  const rows=players.map(p=>{let pres=ret=an=ae=ab=0;sessions.forEach(s=>{const a=attendance.find(x=>x.session_id===s.id&&x.player_id===p.id);if(!a)return;if(a.status==='present'){pres++;if(a.late)ret++}else if(a.status==='absent')an++;else if(a.status==='excused')ae++;else if(a.status==='injured')ab++});const total=pres+an+ae+ab,abs=an+ae+ab,pct=total?Math.round(pres/total*100):0,cls=pct>=80?'good':pct>=60?'mid':'low';return `<tr><td><b>${esc(p.name)}</b></td><td>${pres}</td><td>${ret}</td><td>${an}</td><td>${ae}</td><td>${ab}</td><td><b>${abs}</b></td><td><span class="badge ${cls}">${pct}%</span></td></tr>`}).join('');
  $('statsBody').innerHTML=players.length?`<table><thead><tr><th>Joueuse</th><th>🟢</th><th>R</th><th>🔴</th><th>🟡</th><th>🔵</th><th>Abs.</th><th>%</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="muted">Aucune joueuse.</div>';
 }
@@ -164,21 +184,36 @@ function renderTeam(){
 async function switchTeam(t){current=t;$('u11').classList.toggle('on',t==='U11F');$('u18').classList.toggle('on',t==='U18F');await load()}
 $('u11').onclick=()=>switchTeam('U11F');$('u18').onclick=()=>switchTeam('U18F');
 $('add').onclick=async()=>{const n=$('newName').value.trim();if(!n)return;const r=await db.from('players').insert({team_id:teamId(),name:n});if(r.error)alert('Erreur : '+r.error.message);else{$('newName').value='';await load()}};
-$('allPresentBtn').onclick=async()=>{
-  if(!players.length)return;
-  if(!confirm('Marquer toutes les joueuses présentes pour cette séance ?'))return;
+$('allPresentBtn').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  const btn=$('allPresentBtn');
+  if(!players.length){alert('Aucune joueuse dans cette équipe.');return;}
+  btn.disabled=true;
+  btn.textContent='⏳ Enregistrement…';
   try{
-    const s=await ensureSession();
+    const session=await ensureSession();
     const now=new Date().toISOString();
     const rows=players.map(p=>{
       const old=markFor(p);
-      return {session_id:s.id,player_id:p.id,status:'present',late:old?.status==='present'?(old?.late||false):false,updated_at:now};
+      return {session_id:session.id,player_id:p.id,status:'present',late:old?.status==='present' ? Boolean(old.late) : false,updated_at:now};
     });
     const r=await db.from('attendance').upsert(rows,{onConflict:'session_id,player_id'});
-    if(r.error)throw r.error;
-    await load();
-  }catch(e){alert('Erreur : '+e.message)}
-};
+    if(r.error) throw r.error;
+    rows.forEach(row=>{
+      const idx=attendance.findIndex(a=>a.session_id===row.session_id && a.player_id===row.player_id);
+      if(idx>=0) attendance[idx]={...attendance[idx],...row}; else attendance.push(row);
+    });
+    render();
+    btn.textContent='✅ Présentes : '+players.length;
+    sync('✓ '+players.length+' présences enregistrées');
+    setTimeout(()=>{btn.textContent='✅ Tout le monde présent';btn.disabled=false},1200);
+  }catch(e){
+    console.error(e);
+    alert('Impossible d’enregistrer les présences : '+(e?.message||String(e)));
+    btn.textContent='✅ Tout le monde présent';
+    btn.disabled=false;
+  }
+});
 $('date').onchange=render;
 function tab(x){$('pageEm').hidden=x!=='em';$('pageStats').hidden=x!=='stats';$('pageTeam').hidden=x!=='team';$('tabEm').classList.toggle('on',x==='em');$('tabStats').classList.toggle('on',x==='stats');$('tabTeam').classList.toggle('on',x==='team')}
 $('tabEm').onclick=()=>tab('em');$('tabStats').onclick=()=>tab('stats');$('tabTeam').onclick=()=>tab('team');
@@ -192,7 +227,7 @@ async function startAfterLogin(){
   started=true;
   await showApp();
   await load();
-  setInterval(()=>{if(!document.hidden)load()},5000);
+  setInterval(()=>{if(!document.hidden)load()},30000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
 }
 
