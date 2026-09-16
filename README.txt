@@ -1,0 +1,1 @@
+Application Émargement Basket connectée à Supabase. Deux équipes U11F/U18F, 4 statuts et R indépendant pour les retards. Synchronisation toutes les 5 secondes. La clé utilisée est une clé publishable, prévue pour être exposée dans une application web; la sécurité des données dépend des politiques RLS du projet.

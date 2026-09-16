@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Émargement Basket</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#17202a;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+header{background:#111827;color:#fff;padding:14px;position:sticky;top:0;z-index:10}h1{margin:0 0 10px;font-size:20px}
+.teams{display:flex;gap:8px}.team{flex:1;background:#374151;color:#dbe4ef;font-size:16px}.team.on{background:#fff;color:#111827}
+main{max-width:760px;margin:auto;padding:12px}.tabs{display:flex;gap:7px;margin-bottom:10px}.tabs button{flex:1;background:#e9edf2}.tabs button.on{background:#111827;color:#fff}
+.card{background:#fff;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 2px 10px #0001}.bar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+input,select,button{font:inherit}input,select{padding:10px;border:1px solid #d9dee5;border-radius:10px;background:#fff}
+button{border:0;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer}.primary{background:#111827;color:#fff}.danger{background:#fee2e2;color:#991b1b}
+.muted{color:#687386;font-size:12px}.sync{font-size:11px;color:#cbd5e1;margin-top:5px}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}.stat{text-align:center;background:#f7f8fa;border-radius:11px;padding:8px}.stat b{display:block;font-size:19px}.stat span{font-size:11px}
+.row{display:grid;grid-template-columns:minmax(120px,1fr) repeat(4,43px) 38px;gap:5px;align-items:center;padding:9px 0;border-bottom:1px solid #eee}.name{font-weight:700}
+.st{height:40px;width:43px;padding:0;background:#f1f3f5;font-size:18px;border:2px solid transparent}.st.active.present{background:#dcfce7;border-color:#22c55e}.st.active.absent{background:#fee2e2;border-color:#ef4444}.st.active.excused{background:#fef3c7;border-color:#f59e0b}.st.active.injured{background:#dbeafe;border-color:#3b82f6}
+.late{height:40px;width:38px;padding:0;background:#fff;border:2px solid #d9dee5;font-size:14px}.late.on{background:#f3e8ff;border-color:#8b5cf6;color:#6d28d9}.late:disabled{opacity:.35}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#687386;margin-top:8px}.item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 5px;border-bottom:1px solid #eee;text-align:center}th:first-child,td:first-child{text-align:left}
+.badge{display:inline-block;padding:3px 7px;border-radius:99px;font-weight:700;background:#eef1f5}.good{background:#dcfce7}.mid{background:#fef3c7}.low{background:#fee2e2}
+@media(max-width:470px){.row{grid-template-columns:minmax(105px,1fr) repeat(4,39px) 36px;gap:4px}.st{width:39px}.late{width:36px}.summary{gap:4px}.stat{padding:7px 2px}}
+</style>
+</head>
+<body>
+<header>
+<h1>🏀 Émargement Basket</h1>
+<div class="teams"><button class="team on" id="u11">U11F</button><button class="team" id="u18">U18F</button></div>
+<div class="sync" id="sync">Connexion…</div>
+</header>
+<main>
+<div class="tabs"><button class="on" id="tabEm">Émargement</button><button id="tabStats">📊 Assiduité</button><button id="tabTeam">👥 Équipe</button></div>
+
+<section id="pageEm" class="card">
+<div class="bar"><div><b id="sessionTitle">U11F — Émargement</b><div class="muted">R = retard, indépendant du statut.</div></div>
+<div style="display:flex;gap:6px"><input id="date" type="date"><select id="kind"><option>Entraînement</option><option>Match</option><option>Autre</option></select></div></div>
+<div id="summary" class="summary"></div>
+<div class="legend"><span>🟢 Présente</span><span>🔴 Abs. non exc.</span><span>🟡 Abs. exc.</span><span>🔵 Abs. blessée</span><span>R = retard</span></div>
+<div id="players" style="margin-top:6px"></div>
+</section>
+
+<section id="pageStats" class="card" hidden>
+<div><b id="statsTitle">U11F — Assiduité</b><div class="muted">Le retard ne compte pas comme une absence.</div></div>
+<div id="statsBody" style="overflow:auto;margin-top:8px"></div>
+</section>
+
+<section id="pageTeam" class="card" hidden>
+<div><b id="teamTitle">U11F — Joueuses</b><div class="muted">La liste est partagée entre les utilisateurs.</div></div>
+<div style="display:flex;gap:7px;margin-top:10px"><input id="newName" placeholder="Prénom / nom" style="flex:1"><button class="primary" id="add">Ajouter</button></div>
+<div id="teamList" style="margin-top:8px"></div>
+</section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL='https://roqfjstasmlcfasmzjdk.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4dyWekEBF7mttdHt_6PqXw_mN-Mu4tA';
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+let current='U11F', teams={}, players=[], sessions=[], attendance=[];
+const $=id=>document.getElementById(id);
+$('date').value=new Date().toISOString().slice(0,10);
+
+function esc(x){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function teamId(){return teams[current]?.id}
+function currentSession(){return sessions.find(s=>s.session_date===$('date').value&&s.session_type===$('kind').value)}
+function markFor(pid){const s=currentSession();return s?attendance.find(a=>a.session_id===s.id&&a.player_id===pid):null}
+function sortPlayers(){players.sort((a,b)=>a.name.localeCompare(b.name,'fr',{sensitivity:'base'}))}
+function sync(text){$('sync').textContent=text}
+
+async function load(){
+ sync('Synchronisation…');
+ const t=await db.from('teams').select('*').order('code');
+ if(t.error){sync('Erreur de connexion');console.error(t.error);return}
+ teams=Object.fromEntries((t.data||[]).map(x=>[x.code,x]));
+ const tid=teamId();
+ if(!tid){sync('Équipe introuvable');return}
+ const p=await db.from('players').select('*').eq('team_id',tid).eq('active',true);
+ if(p.error){sync('Erreur de connexion');console.error(p.error);return}
+ players=p.data||[];sortPlayers();
+ const s=await db.from('sessions').select('*').eq('team_id',tid).order('session_date',{ascending:false});
+ if(s.error){sync('Erreur de connexion');console.error(s.error);return}
+ sessions=s.data||[];
+ const ids=sessions.map(x=>x.id);
+ const a=ids.length?await db.from('attendance').select('*').in('session_id',ids):{data:[],error:null};
+ if(a.error){sync('Erreur de connexion');console.error(a.error);return}
+ attendance=a.data||[];
+ render();
+ sync('✓ Synchronisé · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+}
+
+async function ensureSession(){
+ let s=currentSession();if(s)return s;
+ const r=await db.from('sessions').upsert({team_id:teamId(),session_date:$('date').value,session_type:$('kind').value},{onConflict:'team_id,session_date,session_type'}).select().single();
+ if(r.error)throw r.error;s=r.data;sessions.push(s);return s;
+}
+
+async function setStatus(pid,status){
+ try{
+  const s=await ensureSession(), old=markFor(pid);
+  const r=await db.from('attendance').upsert({session_id:s.id,player_id:pid,status,late:status==='present'?(old?.late||false):false,updated_at:new Date().toISOString()},{onConflict:'session_id,player_id'});
+  if(r.error)throw r.error;await load();
+ }catch(e){alert('Erreur : '+e.message)}
+}
+async function toggleLate(pid){
+ try{
+  const s=currentSession(), old=markFor(pid);if(!s||!old||old.status!=='present')return;
+  const r=await db.from('attendance').update({late:!old.late,updated_at:new Date().toISOString()}).eq('id',old.id);
+  if(r.error)throw r.error;await load();
+ }catch(e){alert('Erreur : '+e.message)}
+}
+
+function render(){
+ sortPlayers();const s=currentSession(),vals=players.map(p=>markFor(p)?.status),count=x=>vals.filter(v=>v===x).length;
+ $('sessionTitle').textContent=current+' — Émargement';
+ $('statsTitle').textContent=current+' — Assiduité';$('teamTitle').textContent=current+' — Joueuses';
+ $('summary').innerHTML=[['present','Présentes','🟢'],['absent','Abs. non exc.','🔴'],['excused','Abs. exc.','🟡'],['injured','Abs. blessée','🔵']].map(x=>`<div class="stat"><b>${count(x[0])}</b><span>${x[2]} ${x[1]}</span></div>`).join('');
+ $('players').innerHTML=players.length?players.map((p,i)=>{const a=markFor(p),st=a?.status||'';return `<div class="row"><div class="name">${esc(p.name)}</div>${[['present','🟢'],['absent','🔴'],['excused','🟡'],['injured','🔵']].map(x=>`<button class="st ${x[0]} ${st===x[0]?'active':''}" data-i="${i}" data-s="${x[0]}">${x[1]}</button>`).join('')}<button class="late ${a?.late?'on':''}" ${st!=='present'?'disabled':''} data-late="${i}">R</button></div>`}).join(''):'<div class="muted" style="padding:18px 0">Aucune joueuse. Ajoute-les dans « Équipe ».</div>';
+ document.querySelectorAll('.st').forEach(b=>b.onclick=()=>setStatus(players[+b.dataset.i].id,b.dataset.s));
+ document.querySelectorAll('[data-late]').forEach(b=>b.onclick=()=>toggleLate(players[+b.dataset.late].id));
+ renderStats();renderTeam();
+}
+
+function renderStats(){
+ const rows=players.map(p=>{let pres=ret=an=ae=ab=0;sessions.forEach(s=>{const a=attendance.find(x=>x.session_id===s.id&&x.player_id===p.id);if(!a)return;if(a.status==='present'){pres++;if(a.late)ret++}else if(a.status==='absent')an++;else if(a.status==='excused')ae++;else if(a.status==='injured')ab++});const total=pres+an+ae+ab,abs=an+ae+ab,pct=total?Math.round(pres/total*100):0,cls=pct>=80?'good':pct>=60?'mid':'low';return `<tr><td><b>${esc(p.name)}</b></td><td>${pres}</td><td>${ret}</td><td>${an}</td><td>${ae}</td><td>${ab}</td><td><b>${abs}</b></td><td><span class="badge ${cls}">${pct}%</span></td></tr>`}).join('');
+ $('statsBody').innerHTML=players.length?`<table><thead><tr><th>Joueuse</th><th>🟢</th><th>R</th><th>🔴</th><th>🟡</th><th>🔵</th><th>Abs.</th><th>%</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="muted">Aucune joueuse.</div>';
+}
+function renderTeam(){
+ $('teamList').innerHTML=players.map((p,i)=>`<div class="item"><b>${esc(p.name)}</b><button class="danger del" data-i="${i}">Supprimer</button></div>`).join('');
+ document.querySelectorAll('.del').forEach(b=>b.onclick=async()=>{const p=players[+b.dataset.i];if(!confirm('Supprimer '+p.name+' de '+current+' ?'))return;const r=await db.from('players').delete().eq('id',p.id);if(r.error)alert('Erreur : '+r.error.message);else await load()});
+}
+async function switchTeam(t){current=t;$('u11').classList.toggle('on',t==='U11F');$('u18').classList.toggle('on',t==='U18F');await load()}
+$('u11').onclick=()=>switchTeam('U11F');$('u18').onclick=()=>switchTeam('U18F');
+$('add').onclick=async()=>{const n=$('newName').value.trim();if(!n)return;const r=await db.from('players').insert({team_id:teamId(),name:n});if(r.error)alert('Erreur : '+r.error.message);else{$('newName').value='';await load()}};
+$('date').onchange=render;$('kind').onchange=render;
+function tab(x){$('pageEm').hidden=x!=='em';$('pageStats').hidden=x!=='stats';$('pageTeam').hidden=x!=='team';$('tabEm').classList.toggle('on',x==='em');$('tabStats').classList.toggle('on',x==='stats');$('tabTeam').classList.toggle('on',x==='team')}
+$('tabEm').onclick=()=>tab('em');$('tabStats').onclick=()=>tab('stats');$('tabTeam').onclick=()=>tab('team');
+load();setInterval(load,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
+</script>
+</body>
+</html>
