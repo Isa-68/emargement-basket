@@ -1,9 +1,24 @@
 {
-  "name": "Émargement Basket",
-  "short_name": "Émargement",
-  "start_url": ".",
+  "name": "Émargement équipes JAB",
+  "short_name": "Émargement JAB",
+  "description": "Émargement des équipes Jura Alsacien Basket",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#f4f6f8",
-  "theme_color": "#111827",
-  "lang": "fr"
+  "background_color": "#f5f5f5",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
