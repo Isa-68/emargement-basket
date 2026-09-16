@@ -164,7 +164,7 @@ async function loadSession(){
   let {data,error}=await db.from("sessions")
     .select("*")
     .eq("team_id",team.id)
-    .eq("date",date)
+    .eq("session_date",date)
     .eq("session_type","Entraînement")
     .maybeSingle();
 
@@ -172,7 +172,7 @@ async function loadSession(){
 
   if(!data){
     const ins=await db.from("sessions").insert({
-      team_id:team.id,date:date,session_type:"Entraînement"
+      team_id:team.id,session_date:date,session_type:"Entraînement"
     }).select().single();
     if(ins.error){msg("Erreur création séance : "+ins.error.message);return;}
     data=ins.data;
@@ -238,7 +238,7 @@ async function setStatus(playerId,status){
     player_id:playerId,
     status:status,
     late:!!attendance[playerId].late
-  },{onConflict:"session_id,player_id"}).select();
+  },{onConflict:"session_id,player_id"});
 
   if(error){
     msg("Erreur d'enregistrement : "+error.message);
@@ -246,7 +246,6 @@ async function setStatus(playerId,status){
     render();
     return;
   }
-  if(data && data[0]) attendance[playerId]=data[0];
   msg("Présence enregistrée.",true);
 }
 
@@ -264,9 +263,8 @@ async function setLate(playerId,late){
     player_id:playerId,
     status:old.status,
     late
-  },{onConflict:"session_id,player_id"}).select();
+  },{onConflict:"session_id,player_id"});
   if(error){msg("Erreur : "+error.message);return;}
-  if(data && data[0]) attendance[playerId]=data[0];
   msg("Retard enregistré.",true);
 }
 
@@ -280,9 +278,8 @@ async function allPresent(){
       player_id:p.id,
       status:"present",
       late:!!(old&&old.late)
-    },{onConflict:"session_id,player_id"}).select();
+    },{onConflict:"session_id,player_id"});
     if(error){msg("Erreur : "+error.message);return;}
-    if(data&&data[0])attendance[p.id]=data[0];
   }
   render();
   msg("Tout le monde est marqué présent.",true);
