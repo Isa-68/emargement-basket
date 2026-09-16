@@ -121,7 +121,28 @@ const STATUS = {
   injured: "🔵"
 };
 
-\nconst TEAM_ACCESS={"maite.schneider@wanadoo.fr":["U18F"]};\nlet allowedTeams=["U11F","U18F"];\nlet currentEmail="";\nasync function loadAccess(){const {data,error}=await db.auth.getUser();if(error||!data.user){allowedTeams=["U11F","U18F"];return;}currentEmail=(data.user.email||"").toLowerCase();allowedTeams=TEAM_ACCESS[currentEmail]||["U11F","U18F"];$("u11Btn").style.display=allowedTeams.includes("U11F")?"block":"none";$("u18Btn").style.display=allowedTeams.includes("U18F")?"block":"none";$("accessInfo").textContent=allowedTeams.length===1?"Accès : "+allowedTeams[0]:"Accès : U11F et U18F";}\n
+
+const TEAM_ACCESS = {
+  "maite.schneider@wanadoo.fr": ["U18F"]
+};
+
+let allowedTeams = ["U11F", "U18F"];
+
+async function applyAccess(){
+  const result = await db.auth.getUser();
+  const email = (result.data && result.data.user && result.data.user.email || "").toLowerCase();
+  allowedTeams = TEAM_ACCESS[email] || ["U11F", "U18F"];
+
+  $("u11Btn").style.display = allowedTeams.includes("U11F") ? "" : "none";
+  $("u18Btn").style.display = allowedTeams.includes("U18F") ? "" : "none";
+
+  if($("accessInfo")){
+    $("accessInfo").textContent = allowedTeams.length === 1
+      ? "Accès : " + allowedTeams[0]
+      : "Accès : U11F et U18F";
+  }
+}
+
 let team = null;
 let players = [];
 let attendance = {};
@@ -160,7 +181,6 @@ async function login(){
 async function logout(){
   await db.auth.signOut();
   allowedTeams=["U11F","U18F"];
-  currentEmail="";
   $("app").style.display="none";
   $("login").style.display="block";
 }
@@ -168,7 +188,7 @@ async function logout(){
 async function showApp(){
   $("login").style.display="none";
   $("app").style.display="block";
-  await loadAccess();
+  await applyAccess();
   await loadTeam(allowedTeams[0] || "U11F");
 }
 
