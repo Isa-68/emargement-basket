@@ -79,9 +79,9 @@ button{border:0;border-radius:9px;padding:11px 14px;font-size:16px;cursor:pointe
   <div class="card">
     <div class="toolbar">
       <input id="date" class="date" type="date">
-      <button id="allPresent">🟢 Tout le monde présent</button>
+      <button id="allPresent">🟢 Tout le monde présent</button><button id="resetAll" style="background:#ffe0e0;color:#9b0000">🔄 Tout réinitialiser</button>
     </div>
-    <p id="sessionMsg" class="muted"></p>
+    <p id="sessionMsg" class="muted"></p><p class="muted">Le bouton « Tout réinitialiser » supprime les entraînements et émargements de test des deux équipes, mais conserve les joueuses et les comptes.</p>
   </div>
 
   <div id="attendanceView" class="view">
@@ -333,6 +333,53 @@ async function allPresent(){
   if($("statsView").style.display!=="none") loadStats();
 }
 
+
+async function resetAll(){
+  const ok = confirm(
+    "⚠️ RÉINITIALISATION COMPLÈTE\n\n" +
+    "Cette action va supprimer TOUS les entraînements et TOUS les émargements " +
+    "des U11F et U18F.\n\n" +
+    "Les joueuses et les comptes de connexion seront conservés.\n\n" +
+    "Es-tu sûre de vouloir repartir de zéro ?"
+  );
+  if(!ok) return;
+
+  msg("Réinitialisation…");
+
+  // Récupérer toutes les séances des deux équipes.
+  const sessionsResult = await db.from("sessions").select("id");
+  if(sessionsResult.error){
+    msg("Erreur : "+sessionsResult.error.message);
+    return;
+  }
+
+  const sessionIds=(sessionsResult.data||[]).map(s=>s.id);
+
+  // Supprimer d'abord les émargements liés aux séances.
+  if(sessionIds.length){
+    const a=await db.from("attendance").delete().in("session_id",sessionIds);
+    if(a.error){
+      msg("Erreur suppression émargements : "+a.error.message);
+      return;
+    }
+  }
+
+  // Puis supprimer toutes les séances.
+  const s=await db.from("sessions").delete().not("id","is",null);
+  if(s.error){
+    msg("Erreur suppression entraînements : "+s.error.message);
+    return;
+  }
+
+  attendance={};
+  session=null;
+
+  await loadSession();
+  if($("statsView").style.display!=="none") await loadStats();
+
+  msg("✅ Tout a été réinitialisé. Les joueuses sont conservées.",true);
+}
+
 async function addPlayer(){
   const name=$("newPlayer").value.trim();
   if(!name){return;}
@@ -463,6 +510,7 @@ $("u11Btn").addEventListener("click",()=>loadTeam("U11F"));
 $("u18Btn").addEventListener("click",()=>loadTeam("U18F"));
 $("date").addEventListener("change",loadSession);
 $("allPresent").addEventListener("click",allPresent);
+$("resetAll").addEventListener("click",resetAll);
 $("addPlayer").addEventListener("click",addPlayer);
 $("newPlayer").addEventListener("keydown",e=>{if(e.key==="Enter")addPlayer()});
 $("attendanceTab").addEventListener("click",()=>showView("attendance"));
