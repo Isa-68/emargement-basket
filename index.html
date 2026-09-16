@@ -81,7 +81,7 @@ button{border:0;border-radius:9px;padding:11px 14px;font-size:16px;cursor:pointe
       <input id="date" class="date" type="date">
       <button id="allPresent">🟢 Tout le monde présent</button><button id="resetAll" style="background:#ffe0e0;color:#9b0000">🔄 Tout réinitialiser</button>
     </div>
-    <p id="sessionMsg" class="muted"></p><p class="muted">Le bouton « Tout réinitialiser » supprime les entraînements et émargements de test des deux équipes, mais conserve les joueuses et les comptes.</p>
+    <p id="sessionMsg" class="muted"></p><p class="muted">Le bouton « Tout réinitialiser » supprime les entraînements et émargements de test des deux équipes. Une nouvelle séance ne sera créée que lors du premier enregistrement.</p>
   </div>
 
   <div id="attendanceView" class="view">
@@ -189,30 +189,68 @@ async function loadPlayers(){
 
 async function loadSession(){
   attendance={};
+  session=null;
   const date=$("date").value;
-  let {data,error}=await db.from("sessions")
+
+  const {data,error}=await db.from("sessions")
     .select("*")
     .eq("team_id",team.id)
     .eq("session_date",date)
     .eq("session_type","Entraînement")
     .maybeSingle();
 
-  if(error){msg("Erreur séance : "+error.message);return;}
-
-  if(!data){
-    const ins=await db.from("sessions").insert({
-      team_id:team.id,session_date:date,session_type:"Entraînement"
-    }).select().single();
-    if(ins.error){msg("Erreur création séance : "+ins.error.message);return;}
-    data=ins.data;
+  if(error){
+    msg("Erreur séance : "+error.message);
+    return;
   }
+
+  // Important : choisir une date ne crée PAS une séance.
+  // La séance ne sera créée que lorsqu'une présence/absence est enregistrée.
+  if(!data){
+    render();
+    msg("Aucun entraînement enregistré pour cette date.");
+    return;
+  }
+
   session=data;
 
   const a=await db.from("attendance").select("*").eq("session_id",session.id);
-  if(a.error){msg("Erreur émargement : "+a.error.message);return;}
+  if(a.error){
+    msg("Erreur émargement : "+a.error.message);
+    return;
+  }
+
   (a.data||[]).forEach(x=>attendance[x.player_id]=x);
   render();
   msg("Séance du "+date.split("-").reverse().join("/")+" prête.",true);
+}
+
+async function ensureSession(){
+  if(session) return session;
+
+  const date=$("date").value;
+  const existing=await db.from("sessions")
+    .select("*")
+    .eq("team_id",team.id)
+    .eq("session_date",date)
+    .eq("session_type","Entraînement")
+    .maybeSingle();
+
+  if(existing.error) throw new Error(existing.error.message);
+  if(existing.data){
+    session=existing.data;
+    return session;
+  }
+
+  const ins=await db.from("sessions").insert({
+    team_id:team.id,
+    session_date:date,
+    session_type:"Entraînement"
+  }).select().single();
+
+  if(ins.error) throw new Error(ins.error.message);
+  session=ins.data;
+  return session;
 }
 
 function render(){
@@ -257,7 +295,12 @@ function render(){
 }
 
 async function setStatus(playerId,status){
-  if(!session){msg("Aucune séance.");return;}
+  try{
+    await ensureSession();
+  }catch(e){
+    msg("Erreur création séance : "+e.message);
+    return;
+  }
   const old=attendance[playerId];
   attendance[playerId]={...(old||{}),status};
   render();
@@ -280,11 +323,16 @@ async function setStatus(playerId,status){
 }
 
 async function setLate(playerId,late){
-  if(!session)return;
   const old=attendance[playerId];
   if(!old || !old.status){
     msg("Choisis d'abord un statut.");
     render();
+    return;
+  }
+  try{
+    await ensureSession();
+  }catch(e){
+    msg("Erreur création séance : "+e.message);
     return;
   }
   attendance[playerId]={...old,late};
@@ -300,7 +348,12 @@ async function setLate(playerId,late){
 }
 
 async function allPresent(){
-  if(!session)return;
+  try{
+    await ensureSession();
+  }catch(e){
+    msg("Erreur création séance : "+e.message);
+    return;
+  }
   msg("Enregistrement…");
 
   // Mise à jour immédiate de l'écran.
