@@ -164,32 +164,45 @@ function renderTeam(){
 async function switchTeam(t){current=t;$('u11').classList.toggle('on',t==='U11F');$('u18').classList.toggle('on',t==='U18F');await load()}
 $('u11').onclick=()=>switchTeam('U11F');$('u18').onclick=()=>switchTeam('U18F');
 $('add').onclick=async()=>{const n=$('newName').value.trim();if(!n)return;const r=await db.from('players').insert({team_id:teamId(),name:n});if(r.error)alert('Erreur : '+r.error.message);else{$('newName').value='';await load()}};
-$('allPresentBtn').onclick=async()=>{
-  if(!players.length){alert('Aucune joueuse dans cette équipe.');return}
+$('allPresentBtn').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  if(!players.length){alert('Aucune joueuse dans cette équipe.');return;}
+  const btn=$('allPresentBtn');
   try{
-    $('allPresentBtn').disabled=true;
-    $('allPresentBtn').textContent='⏳ Enregistrement…';
+    btn.disabled=true;
+    btn.textContent='⏳ Enregistrement…';
+
     const s=await ensureSession();
     const now=new Date().toISOString();
-    for(const p of players){
+
+    const rows=players.map(p=>{
       const old=markFor(p);
-      const r=await db.from('attendance').upsert({
+      return {
         session_id:s.id,
         player_id:p.id,
         status:'present',
-        late:old?.status==='present' ? !!old.late : false,
+        late: old?.status==='present' ? Boolean(old.late) : false,
         updated_at:now
-      },{onConflict:'session_id,player_id'});
-      if(r.error) throw r.error;
-    }
+      };
+    });
+
+    const r=await db
+      .from('attendance')
+      .upsert(rows,{onConflict:'session_id,player_id'});
+
+    if(r.error) throw r.error;
+
     await load();
+    btn.textContent='✅ Tout le monde est présent';
+    setTimeout(()=>{btn.textContent='✅ Tout le monde présent'},1200);
   }catch(e){
-    alert('Impossible de marquer tout le monde présent : '+e.message);
+    console.error(e);
+    alert('Impossible de marquer tout le monde présent : '+(e?.message||e));
   }finally{
-    $('allPresentBtn').disabled=false;
-    $('allPresentBtn').textContent='✅ Tout le monde présent';
+    btn.disabled=false;
+    if(!btn.textContent.includes('est présent')) btn.textContent='✅ Tout le monde présent';
   }
-};
+});
 $('date').onchange=render;
 function tab(x){$('pageEm').hidden=x!=='em';$('pageStats').hidden=x!=='stats';$('pageTeam').hidden=x!=='team';$('tabEm').classList.toggle('on',x==='em');$('tabStats').classList.toggle('on',x==='stats');$('tabTeam').classList.toggle('on',x==='team')}
 $('tabEm').onclick=()=>tab('em');$('tabStats').onclick=()=>tab('stats');$('tabTeam').onclick=()=>tab('team');
