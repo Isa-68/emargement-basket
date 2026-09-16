@@ -27,7 +27,7 @@ button{border:0;border-radius:9px;padding:12px 16px;font-size:16px;cursor:pointe
 <h1>🏀 Émargement Basket</h1>
 <input id="email" type="email" placeholder="Email">
 <input id="password" type="password" placeholder="Mot de passe">
-<button id="loginBtn" class="primary">Se connecter</button>
+<button id="loginBtn" class="primary" type="button" onclick="window.loginNow()">Se connecter</button>
 <div id="loginMsg" class="status"></div>
 </div>
 
@@ -135,17 +135,29 @@ async function setPresent(playerId){
   status('✓ Présence enregistrée');
 }
 
-$('loginBtn').addEventListener('click',async()=>{
-  $('loginMsg').textContent='Connexion…';
-  const r=await db.auth.signInWithPassword({
-    email:$('email').value.trim(),
-    password:$('password').value
-  });
-  if(r.error){$('loginMsg').textContent=r.error.message;$('loginMsg').className='status error';return}
-  $('login').classList.add('hidden');
-  $('app').classList.remove('hidden');
-  load();
-});
+window.loginNow=async function(){
+  const m=$('loginMsg');
+  m.textContent='Connexion…';
+  m.className='status';
+  try{
+    const r=await db.auth.signInWithPassword({
+      email:$('email').value.trim(),
+      password:$('password').value
+    });
+    if(r.error){
+      m.textContent='Erreur : '+r.error.message;
+      m.className='status error';
+      return;
+    }
+    $('login').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    await load();
+  }catch(e){
+    console.error(e);
+    m.textContent='Erreur : '+(e?.message||String(e));
+    m.className='status error';
+  }
+};
 
 $('u11').addEventListener('click',async()=>{teamCode='U11F';await load()});
 $('u18').addEventListener('click',async()=>{teamCode='U18F';await load()});
