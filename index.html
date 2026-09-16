@@ -26,10 +26,22 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 5px;b
 </style>
 </head>
 <body>
+<div id="loginScreen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:#f4f6f8">
+  <div class="card" style="width:min(420px,100%);margin:0">
+    <h1 style="margin:0 0 8px">🏀 Émargement Basket</h1>
+    <p class="muted" style="font-size:14px;margin-bottom:16px">Connexion réservée aux personnes autorisées.</p>
+    <input id="loginEmail" type="email" placeholder="Adresse e-mail" autocomplete="username" style="width:100%;margin-bottom:8px">
+    <input id="loginPassword" type="password" placeholder="Mot de passe" autocomplete="current-password" style="width:100%;margin-bottom:10px">
+    <button class="primary" id="loginBtn" style="width:100%">Se connecter</button>
+    <div id="loginMsg" class="muted" style="margin-top:10px"></div>
+  </div>
+</div>
+<div id="app" hidden>
 <header>
 <h1>🏀 Émargement Basket</h1>
 <div class="teams"><button class="team on" id="u11">U11F</button><button class="team" id="u18">U18F</button></div>
 <div class="sync" id="sync">Connexion…</div>
+<div style="margin-top:7px"><button id="logoutBtn" style="padding:6px 9px;font-size:12px;background:#fff;color:#111827">Se déconnecter</button></div>
 </header>
 <main>
 <div class="tabs"><button class="on" id="tabEm">Émargement</button><button id="tabStats">📊 Assiduité</button><button id="tabTeam">👥 Équipe</button></div>
@@ -59,7 +71,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 5px;b
 const SUPABASE_URL='https://roqfjstasmlcfasmzjdk.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4dyWekEBF7mttdHt_6PqXw_mN-Mu4tA';
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-let current='U11F', teams={}, players=[], sessions=[], attendance=[];
+let current='U11F', teams={}, players=[], sessions=[], attendance=[], started=false;
 const $=id=>document.getElementById(id);
 $('date').value=new Date().toISOString().slice(0,10);
 
@@ -137,7 +149,33 @@ $('add').onclick=async()=>{const n=$('newName').value.trim();if(!n)return;const 
 $('date').onchange=render;$('kind').onchange=render;
 function tab(x){$('pageEm').hidden=x!=='em';$('pageStats').hidden=x!=='stats';$('pageTeam').hidden=x!=='team';$('tabEm').classList.toggle('on',x==='em');$('tabStats').classList.toggle('on',x==='stats');$('tabTeam').classList.toggle('on',x==='team')}
 $('tabEm').onclick=()=>tab('em');$('tabStats').onclick=()=>tab('stats');$('tabTeam').onclick=()=>tab('team');
-load();setInterval(load,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
+async function startAfterLogin(){
+  if(started)return;
+  started=true;
+  $('loginScreen').hidden=true;
+  $('app').hidden=false;
+  await load();
+  setInterval(()=>{if(!document.hidden)load()},5000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
+}
+
+$('loginBtn').onclick=async()=>{
+  const email=$('loginEmail').value.trim(), password=$('loginPassword').value;
+  if(!email||!password){$('loginMsg').textContent='Renseigne ton e-mail et ton mot de passe.';return}
+  $('loginBtn').disabled=true;$('loginMsg').textContent='Connexion…';
+  const r=await db.auth.signInWithPassword({email,password});
+  $('loginBtn').disabled=false;
+  if(r.error){$('loginMsg').textContent='Connexion impossible : '+r.error.message;return}
+  $('loginMsg').textContent='';
+  await startAfterLogin();
+};
+$('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')$('loginBtn').click()});
+$('logoutBtn').onclick=async()=>{await db.auth.signOut();location.reload()};
+
+(async()=>{
+  const r=await db.auth.getSession();
+  if(r.data?.session) await startAfterLogin();
+})();
 </script>
 </body>
 </html>
