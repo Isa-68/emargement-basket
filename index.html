@@ -302,17 +302,33 @@ async function setLate(playerId,late){
 async function allPresent(){
   if(!session)return;
   msg("Enregistrement…");
-  for(const p of players){
+
+  // Mise à jour immédiate de l'écran.
+  players.forEach(p=>{
     const old=attendance[p.id];
-    const {data,error}=await db.from("attendance").upsert({
+    attendance[p.id]={
+      ...(old||{}),
+      status:"present",
+      late:!!(old&&old.late)
+    };
+  });
+  render();
+
+  // Puis sauvegarde dans Supabase.
+  for(const p of players){
+    const a=attendance[p.id];
+    const {error}=await db.from("attendance").upsert({
       session_id:session.id,
       player_id:p.id,
       status:"present",
-      late:!!(old&&old.late)
+      late:!!a.late
     },{onConflict:"session_id,player_id"});
-    if(error){msg("Erreur : "+error.message);return;}
+    if(error){
+      msg("Erreur : "+error.message);
+      return;
+    }
   }
-  render();
+
   msg("Tout le monde est marqué présent.",true);
   if($("statsView").style.display!=="none") loadStats();
 }
@@ -341,7 +357,10 @@ async function loadStats(){
     .eq("session_type","Entraînement")
     .order("session_date",{ascending:true});
 
-  if(s.error){ $("teamStats").innerHTML='<p class="error">Erreur statistiques : '+s.error.message+'</p>'; return; }
+  if(s.error){
+    $("teamStats").innerHTML='<p class="error">Erreur statistiques : '+s.error.message+'</p>';
+    return;
+  }
   allSessions=s.data||[];
 
   const ids=allSessions.map(x=>x.id);
@@ -351,35 +370,46 @@ async function loadStats(){
     const a=await db.from("attendance")
       .select("session_id,player_id,status,late")
       .in("session_id",ids);
-    if(a.error){ $("teamStats").innerHTML='<p class="error">Erreur statistiques : '+a.error.message+'</p>'; return; }
+    if(a.error){
+      $("teamStats").innerHTML='<p class="error">Erreur statistiques : '+a.error.message+'</p>';
+      return;
+    }
     allAttendance=a.data||[];
   }
 
-  const total=allSessions.length;
-  let present=0, absent=0, excused=0, injured=0, late=0;
-
-  allAttendance.forEach(a=>{
-    if(a.status==="present") present++;
-    if(a.status==="absent") absent++;
-    if(a.status==="excused") excused++;
-    if(a.status==="injured") injured++;
-    if(a.late) late++;
-  });
-
-  const totalRecorded=present+absent+excused+injured;
-  const presencePct=totalRecorded ? Math.round((present/totalRecorded)*1000)/10 : 0;
-
+  // Statistiques générales : uniquement le nombre d'entraînements.
   $("teamStats").innerHTML=`
-    <div class="stats-grid">
-      <div class="stat"><strong>${total}</strong><span>Entraînements</span></div>
-      <div class="stat"><strong>${present}</strong><span>Présences</span></div>
-      <div class="stat"><strong>${late}</strong><span>Retards</span></div>
-      <div class="stat"><strong>${absent}</strong><span>Abs. non exc.</span></div>
-      <div class="stat"><strong>${excused+injured}</strong><span>Absences exc./bless.</span></div>
+    <div class="stats-grid" style="grid-template-columns:1fr">
+      <div class="stat"><strong>${allSessions.length}</strong><span>Entraînements enregistrés</span></div>
     </div>
-    <p class="muted">Taux de présence enregistré : <strong>${presencePct}%</strong> · Absences totales : <strong>${absent+excused+injured}</strong></p>
+    <h3 style="margin:20px 0 8px">Nombre de joueuses par entraînement</h3>
+    <div style="overflow-x:auto">
+      <table class="stats-table">
+        <thead><tr>
+          <th>Date</th><th>Présentes</th><th>Abs. non exc.</th><th>Excusées</th><th>Blessées</th><th>Émargées</th>
+        </tr></thead>
+        <tbody>
+          ${allSessions.map(s=>{
+            const mine=allAttendance.filter(a=>a.session_id===s.id);
+            const pc=mine.filter(a=>a.status==="present").length;
+            const ac=mine.filter(a=>a.status==="absent").length;
+            const ec=mine.filter(a=>a.status==="excused").length;
+            const ic=mine.filter(a=>a.status==="injured").length;
+            const date=s.session_date.split("-").reverse().join("/");
+            return `<tr>
+              <td>${date}</td>
+              <td><strong>${pc}</strong> / ${players.length}</td>
+              <td>${ac}</td><td>${ec}</td><td>${ic}</td>
+              <td>${mine.length} / ${players.length}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted">Une séance non encore émargée n'est pas comptée comme une absence.</p>
   `;
 
+  // Assiduité individuelle.
   const rows=players.map(p=>{
     const mine=allAttendance.filter(a=>a.player_id===p.id);
     const pCount=mine.filter(a=>a.status==="present").length;
@@ -389,30 +419,31 @@ async function loadStats(){
     const iCount=mine.filter(a=>a.status==="injured").length;
     const recorded=mine.length;
     const pct=recorded ? Math.round((pCount/recorded)*1000)/10 : 0;
+
     return `<tr>
       <td>${escapeHtml(p.name)}</td>
-      <td>${recorded}/${total}</td>
+      <td>${recorded}/${allSessions.length}</td>
       <td>${pCount}</td>
       <td>${lCount}</td>
       <td>${aCount}</td>
       <td>${eCount}</td>
       <td>${iCount}</td>
-      <td>${pct}%</td>
+      <td>${recorded ? pct+"%" : "—"}</td>
     </tr>`;
   }).join("");
 
   $("playerStats").innerHTML=`
     <div style="overflow-x:auto">
-    <table class="stats-table">
-      <thead><tr>
-        <th>Joueuse</th><th>Séances</th><th>Prés.</th><th>Ret.</th><th>Abs.</th><th>Exc.</th><th>Bless.</th><th>%</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>
-    <p class="muted">Les retards comptent comme des présences dans le pourcentage.</p>
+      <table class="stats-table">
+        <thead><tr>
+          <th>Joueuse</th><th>Séances émargées</th><th>Prés.</th><th>Ret.</th><th>Abs.</th><th>Exc.</th><th>Bless.</th><th>%</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="muted">Le pourcentage est calculé sur les séances réellement émargées. Un retard compte comme une présence.</p>
   `;
 }
-
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 }
