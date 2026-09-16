@@ -125,9 +125,10 @@ async function setStatus(pid,status){
  try{
   const s=await ensureSession(), old=markFor(pid);
   const payload={session_id:s.id,player_id:pid,status,late:status==='present'?(old?.late||false):false,updated_at:new Date().toISOString()};
-  const r=await db.from('attendance').upsert(payload,{onConflict:'session_id,player_id'}).select().single();
+  const r=await db.from('attendance').upsert(payload,{onConflict:'session_id,player_id'});
   if(r.error)throw r.error;
-  mergeAttendance([r.data]);
+  const saved={...payload,id:old?.id};
+  mergeAttendance([saved]);
   render();
   sync('✓ Enregistré · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
  }catch(e){console.error(e);alert('Erreur : '+e.message)}
@@ -202,9 +203,9 @@ async function markAllPresent(){
     });
 
     // One single request to Supabase for the whole team.
-    const r=await db.from('attendance').upsert(rows,{onConflict:'session_id,player_id'}).select();
+    const r=await db.from('attendance').upsert(rows,{onConflict:'session_id,player_id'});
     if(r.error)throw r.error;
-    mergeAttendance(r.data);
+    mergeAttendance(rows.map(x=>({...x,id:markFor(x.player_id)?.id})));
     render();
     btn.textContent='✅ Présentes : '+players.length;
     sync('✓ '+players.length+' présences enregistrées');
