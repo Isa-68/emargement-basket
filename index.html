@@ -2,271 +2,202 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#111827">
-<link rel="manifest" href="manifest.webmanifest">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Émargement Basket</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#17202a;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
-header{background:#111827;color:#fff;padding:14px;position:sticky;top:0;z-index:10}h1{margin:0 0 10px;font-size:20px}
-.teams{display:flex;gap:8px}.team{flex:1;background:#374151;color:#dbe4ef;font-size:16px}.team.on{background:#fff;color:#111827}
-main{max-width:760px;margin:auto;padding:12px}.tabs{display:flex;gap:7px;margin-bottom:10px}.tabs button{flex:1;background:#e9edf2}.tabs button.on{background:#111827;color:#fff}
-.card{background:#fff;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 2px 10px #0001}.bar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-input,select,button{font:inherit}input,select{padding:10px;border:1px solid #d9dee5;border-radius:10px;background:#fff}
-button{border:0;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer}.primary{background:#111827;color:#fff}.danger{background:#fee2e2;color:#991b1b}
-.muted{color:#687386;font-size:12px}.sync{font-size:11px;color:#cbd5e1;margin-top:5px}
-.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}.stat{text-align:center;background:#f7f8fa;border-radius:11px;padding:8px}.stat b{display:block;font-size:19px}.stat span{font-size:11px}
-.row{display:grid;grid-template-columns:minmax(120px,1fr) repeat(4,43px) 38px;gap:5px;align-items:center;padding:9px 0;border-bottom:1px solid #eee}.name{font-weight:700}
-.st{position:relative;z-index:2;cursor:pointer;height:40px;width:43px;padding:0;background:#f1f3f5;font-size:18px;border:2px solid transparent}.st.active.present{background:#dcfce7;border-color:#22c55e}.st.active.absent{background:#fee2e2;border-color:#ef4444}.st.active.excused{background:#fef3c7;border-color:#f59e0b}.st.active.injured{background:#dbeafe;border-color:#3b82f6}
-.late{height:40px;width:38px;padding:0;background:#fff;border:2px solid #d9dee5;font-size:14px}.late.on{background:#f3e8ff;border-color:#8b5cf6;color:#6d28d9}.late:disabled{opacity:.35}
-.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#687386;margin-top:8px}.item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee}
-table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 5px;border-bottom:1px solid #eee;text-align:center}th:first-child,td:first-child{text-align:left}
-.badge{display:inline-block;padding:3px 7px;border-radius:99px;font-weight:700;background:#eef1f5}.good{background:#dcfce7}.mid{background:#fef3c7}.low{background:#fee2e2}
-@media(max-width:470px){.row{grid-template-columns:minmax(105px,1fr) repeat(4,39px) 36px;gap:4px}.st{position:relative;z-index:2;cursor:pointer;width:39px}.late{width:36px}.summary{gap:4px}.stat{padding:7px 2px}}
-#app{display:none} #app.visible{display:block}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f5f5f5;color:#222}
+header{background:#111;color:#fff;padding:14px;text-align:center}h1{margin:0;font-size:22px}
+main{max-width:760px;margin:auto;padding:14px}.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 2px 8px #0001}
+.team{display:flex;gap:8px}.team button{flex:1;padding:13px;font-size:18px;font-weight:bold;border:0;border-radius:9px;background:#ddd}.team button.active{background:#111;color:#fff}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row input{padding:11px;font-size:16px;flex:1;min-width:180px}
+button{cursor:pointer}.primary{background:#111;color:white;border:0;border-radius:8px;padding:11px 14px;font-weight:bold}
+#status{font-size:13px;color:#666;margin-top:8px}.summary{text-align:center;font-size:18px;font-weight:bold;margin:10px 0}
+.player{display:grid;grid-template-columns:minmax(150px,1fr) repeat(4,42px) 34px;gap:6px;align-items:center;margin:7px 0}
+.player .name{font-weight:bold;overflow:hidden;text-overflow:ellipsis}.status{width:42px;height:42px;border:2px solid #ddd;border-radius:8px;font-size:19px;background:#fff}
+.status.on{border:3px solid #111}.green{background:#b9efc5}.red{background:#ffb8b8}.yellow{background:#ffe78c}.blue{background:#a9d8ff}
+.late{width:32px;height:32px;border-radius:50%;border:1px solid #aaa;background:#fff;font-weight:bold}.late.on{background:#111;color:#fff}
+.remove{background:none;border:0;color:#b00020;font-size:18px}
+.small{font-size:12px;color:#777}.hidden{display:none}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:7px;border-bottom:1px solid #ddd;text-align:center}th:first-child,td:first-child{text-align:left}
+#login{max-width:420px;margin:70px auto;padding:20px}.login input{display:block;width:100%;margin:8px 0;padding:12px;font-size:16px}
+.error{color:#b00020}.ok{color:#187a35}
 </style>
 </head>
 <body>
-<div id="loginScreen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:#f4f6f8">
-  <div class="card" style="width:min(420px,100%);margin:0">
-    <h1 style="margin:0 0 8px">🏀 Émargement Basket</h1>
-    <p class="muted" style="font-size:14px;margin-bottom:16px">Connexion réservée aux personnes autorisées.</p>
-    <input id="loginEmail" type="email" placeholder="Adresse e-mail" autocomplete="username" style="width:100%;margin-bottom:8px">
-    <input id="loginPassword" type="password" placeholder="Mot de passe" autocomplete="current-password" style="width:100%;margin-bottom:10px">
-    <form id="loginForm">
-    <button class="primary" id="loginBtn" type="submit" style="width:100%">Se connecter</button>
-  </form>
-    <div id="loginMsg" class="muted" style="margin-top:10px"></div>
-  </div>
-</div>
-<div id="app">
-<header>
+<div id="login" class="card">
 <h1>🏀 Émargement Basket</h1>
-<div class="teams"><button class="team on" id="u11">U11F</button><button class="team" id="u18">U18F</button></div>
-<div class="sync" id="sync">Connexion…</div>
-<div style="margin-top:7px"><button id="logoutBtn" style="padding:6px 9px;font-size:12px;background:#fff;color:#111827">Se déconnecter</button></div>
-</header>
+<div class="login">
+<input id="email" type="email" placeholder="Email">
+<input id="password" type="password" placeholder="Mot de passe">
+<button id="loginBtn" class="primary" style="width:100%">Se connecter</button>
+<div id="loginMsg" class="small"></div>
+</div>
+</div>
+
+<div id="app" class="hidden">
+<header><h1>🏀 Émargement</h1></header>
 <main>
-<div class="tabs"><button class="on" id="tabEm">Émargement</button><button id="tabStats">📊 Assiduité</button><button id="tabTeam">👥 Équipe</button></div>
+<div class="card">
+<div class="team"><button id="u11">U11F</button><button id="u18">U18F</button></div>
+<div class="row" style="margin-top:12px">
+<label>Date : <input id="date" type="date"></label>
+<button id="all" class="primary">✅ Tout le monde présent</button>
+</div>
+<div id="status"></div>
+</div>
 
-<section id="pageEm" class="card">
-<div class="bar"><div><b id="sessionTitle">U11F — Émargement</b><div class="muted">R = retard, indépendant du statut.</div></div>
-<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="muted">Séance</span><input id="date" type="date"><button id="allPresentBtn" class="primary" type="button">✅ Tout le monde présent</button></div></div>
-<div id="summary" class="summary"></div>
-<div class="legend"><span>🟢 Présente</span><span>🔴 Abs. non exc.</span><span>🟡 Abs. exc.</span><span>🔵 Abs. blessée</span><span>R = retard</span></div>
-<div id="players" style="margin-top:6px"></div>
-</section>
+<div class="card">
+<div id="summary" class="summary">0 / 0 présentes</div>
+<div id="players"></div>
+<div class="row" style="margin-top:12px">
+<input id="newName" placeholder="Nom et prénom de la joueuse">
+<button id="add" class="primary">+ Ajouter</button>
+</div>
+</div>
 
-<section id="pageStats" class="card" hidden>
-<div><b id="statsTitle">U11F — Assiduité</b><div class="muted">Le retard ne compte pas comme une absence.</div></div>
-<div style="margin-top:12px"><b>📅 Présences par séance</b></div>
-<div id="sessionStatsBody" style="overflow:auto;margin-top:8px"></div>
-<div style="margin-top:14px"><b>📊 Assiduité par joueuse</b></div>
-<div id="statsBody" style="overflow:auto;margin-top:8px"></div>
-</section>
-
-<section id="pageTeam" class="card" hidden>
-<div><b id="teamTitle">U11F — Joueuses</b><div class="muted">La liste est partagée entre les utilisateurs.</div></div>
-<div style="display:flex;gap:7px;margin-top:10px"><input id="newName" placeholder="Prénom / nom" style="flex:1"><button class="primary" id="add">Ajouter</button></div>
-<div id="teamList" style="margin-top:8px"></div>
-</section>
+<div class="card">
+<h2>📊 Assiduité</h2>
+<div id="stats"></div>
+</div>
 </main>
+</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SUPABASE_URL='https://roqfjstasmlcfasmzjdk.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4dyWekEBF7mttdHt_6PqXw_mN-Mu4tA';
-const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-let current='U11F', teams={}, players=[], sessions=[], attendance=[], started=false;
+const URL='https://roqfjstasmlcfasmzjdk.supabase.co';
+const KEY='sb_publishable_4dyWekEBF7mttdHt_6PqXw_mN-Mu4tA';
+const db=supabase.createClient(URL,KEY);
+
+let teamCode='U11F', teamId=null, players=[], sessions=[], marks=[];
+let selectedDate=new Date().toISOString().slice(0,10);
+
 const $=id=>document.getElementById(id);
-$('date').value=new Date().toISOString().slice(0,10);
+$('date').value=selectedDate;
 
-function esc(x){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-function teamId(){return teams[current]?.id}
-function currentSession(){return sessions.find(s=>s.session_date===$('date').value&&s.session_type==='Entraînement')}
-function markFor(pid){const s=currentSession();return s?attendance.find(a=>a.session_id===s.id&&a.player_id===pid):null}
-function sortPlayers(){players.sort((a,b)=>a.name.localeCompare(b.name,'fr',{sensitivity:'base'}))}
-function sync(text){$('sync').textContent=text}
+function msg(t,cls=''){ $('status').textContent=t; $('status').className=cls; }
+function currentSession(){return sessions.find(s=>s.team_id===teamId && s.session_date===selectedDate && s.session_type==='Entraînement')}
+function mark(pid){let s=currentSession();return marks.find(a=>a.player_id===pid&&a.session_id===s?.id)}
+function setActiveTeam(){ $('u11').classList.toggle('active',teamCode==='U11F'); $('u18').classList.toggle('active',teamCode==='U18F'); }
 
+async function getTeam(){
+ const r=await db.from('teams').select('*').eq('code',teamCode).single();
+ if(r.error) throw r.error;
+ teamId=r.data.id;
+}
+async function getSession(create=true){
+ let s=currentSession();
+ if(s || !create) return s;
+ const r=await db.from('sessions').insert({team_id:teamId,session_date:selectedDate,session_type:'Entraînement'}).select().single();
+ if(r.error) throw r.error;
+ sessions.push(r.data); return r.data;
+}
 async function load(){
- sync('Synchronisation…');
- const t=await db.from('teams').select('*').order('code');
- if(t.error){sync('Erreur de connexion');console.error(t.error);return}
- teams=Object.fromEntries((t.data||[]).map(x=>[x.code,x]));
- const tid=teamId();
- if(!tid){sync('Équipe introuvable');return}
- const p=await db.from('players').select('*').eq('team_id',tid).eq('active',true);
- if(p.error){sync('Erreur de connexion');console.error(p.error);return}
- players=p.data||[];sortPlayers();
- const s=await db.from('sessions').select('*').eq('team_id',tid).order('session_date',{ascending:false});
- if(s.error){sync('Erreur de connexion');console.error(s.error);return}
- sessions=s.data||[];
- const ids=sessions.map(x=>x.id);
- const a=ids.length?await db.from('attendance').select('*').in('session_id',ids):{data:[],error:null};
- if(a.error){sync('Erreur de connexion');console.error(a.error);return}
- attendance=a.data||[];
- render();
- sync('✓ Synchronisé · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+ try{
+  msg('Synchronisation…');
+  await getTeam();
+  let pr=await db.from('players').select('*').eq('team_id',teamId).order('name');
+  if(pr.error) throw pr.error;
+  players=pr.data||[];
+  let ss=await db.from('sessions').select('*').eq('team_id',teamId).order('session_date',{ascending:false});
+  if(ss.error) throw ss.error;
+  sessions=ss.data||[];
+  let s=currentSession();
+  if(s){
+   let ar=await db.from('attendance').select('*').eq('session_id',s.id);
+   if(ar.error) throw ar.error;
+   marks=ar.data||[];
+  }else marks=[];
+  render(); await loadStats();
+  msg('✓ Synchronisé');
+ }catch(e){console.error(e);msg('Erreur : '+e.message,'error')}
 }
 
-async function ensureSession(){
- let s=currentSession();if(s)return s;
- const r=await db.from('sessions').upsert({team_id:teamId(),session_date:$('date').value,session_type:'Entraînement'},{onConflict:'team_id,session_date,session_type'}).select().single();
- if(r.error)throw r.error;s=r.data;sessions.push(s);return s;
+function render(){
+ setActiveTeam();
+ const present=marks.filter(a=>a.status==='present').length;
+ $('summary').textContent=present+' / '+players.length+' présentes'+(marks.filter(a=>a.status==='present'&&a.late).length?' · '+marks.filter(a=>a.status==='present'&&a.late).length+' retard':'');
+ $('players').innerHTML='';
+ players.forEach(p=>{
+  const a=mark(p);
+  const div=document.createElement('div');div.className='player';
+  const name=document.createElement('div');name.className='name';name.textContent=p.name;
+  div.appendChild(name);
+  [['present','🟢','green'],['absent','🔴','red'],['excused','🟡','yellow'],['injured','🔵','blue']].forEach(([st,icon,cl])=>{
+   const b=document.createElement('button');b.className='status '+cl+(a?.status===st?' on':'');b.textContent=icon;
+   b.title=st;b.addEventListener('click',()=>saveStatus(p.id,st));div.appendChild(b);
+  });
+  const l=document.createElement('button');l.className='late'+(a?.status==='present'&&a?.late?' on':'');l.textContent='R';l.title='Retard';
+  l.addEventListener('click',()=>toggleLate(p.id));div.appendChild(l);
+  $('players').appendChild(div);
+ });
 }
 
-async function setStatus(pid,status){
-  try{
-    const session=await ensureSession();
-    const old=markFor(pid);
-    const row={session_id:session.id,player_id:pid,status,late:status==='present' ? Boolean(old?.late) : false,updated_at:new Date().toISOString()};
-    const r=await db.from('attendance').upsert(row,{onConflict:'session_id,player_id'});
-    if(r.error) throw r.error;
-    // Update the local screen immediately. Do not reload the whole app here.
-    const idx=attendance.findIndex(a=>a.session_id===session.id && a.player_id===pid);
-    if(idx>=0) attendance[idx]={...attendance[idx],...row}; else attendance.push(row);
-    render();
-    sync('✓ Enregistré');
-  }catch(e){
-    console.error(e);
-    alert('Erreur : '+(e?.message||String(e)));
-    sync('Erreur');
-  }
+async function saveStatus(pid,status){
+ try{
+  const s=await getSession(true);
+  const old=mark(pid);
+  const payload={session_id:s.id,player_id:pid,status,late:status==='present'?(old?.late||false):false};
+  const r=await db.from('attendance').upsert(payload,{onConflict:'session_id,player_id'}).select().single();
+  if(r.error) throw r.error;
+  const i=marks.findIndex(x=>x.player_id===pid);
+  if(i>=0)marks[i]=r.data;else marks.push(r.data);
+  render();msg('✓ Enregistré');
+  loadStats();
+ }catch(e){console.error(e);msg('Erreur : '+e.message,'error')}
 }
 async function toggleLate(pid){
-  try{
-    const session=currentSession();
-    const old=markFor(pid);
-    if(!session || !old || old.status!=='present') return;
-    const next=!Boolean(old.late);
-    const r=await db.from('attendance').update({late:next,updated_at:new Date().toISOString()}).eq('id',old.id);
-    if(r.error) throw r.error;
-    old.late=next;
-    render();
-    sync('✓ Enregistré');
-  }catch(e){
-    console.error(e);
-    alert('Erreur : '+(e?.message||String(e)));
-    sync('Erreur');
-  }
+ const a=mark(pid); if(!a||a.status!=='present')return;
+ try{
+  const r=await db.from('attendance').update({late:!a.late}).eq('id',a.id).select().single();
+  if(r.error)throw r.error;
+  Object.assign(a,r.data);render();msg('✓ Enregistré');
+ }catch(e){console.error(e);msg('Erreur : '+e.message,'error')}
 }
-function render(){
- sortPlayers();const s=currentSession(),vals=players.map(p=>markFor(p)?.status),count=x=>vals.filter(v=>v===x).length;
- $('sessionTitle').textContent=current+' — Émargement';
- $('statsTitle').textContent=current+' — Assiduité';$('teamTitle').textContent=current+' — Joueuses';
- const lateCount=players.filter(p=>{const a=markFor(p);return a?.status==='present'&&a?.late}).length;
- const presentCount=count('present');
- const totalPlayers=players.length;
- $('summary').innerHTML=`<div class="stat"><b>${presentCount} / ${totalPlayers}</b><span>👥 Présentes</span></div><div class="stat"><b>${lateCount}</b><span>⏱️ Retards</span></div>`+
- [['absent','Abs. non exc.','🔴'],['excused','Abs. exc.','🟡'],['injured','Abs. blessée','🔵']].map(x=>`<div class="stat"><b>${count(x[0])}</b><span>${x[2]} ${x[1]}</span></div>`).join('');
- $('players').innerHTML=players.length?players.map((p,i)=>{const a=markFor(p),st=a?.status||'';return `<div class="row"><div class="name">${esc(p.name)}</div>${[['present','🟢'],['absent','🔴'],['excused','🟡'],['injured','🔵']].map(x=>`<button type="button" class="st ${x[0]} ${st===x[0]?'active':''}" data-i="${i}" data-s="${x[0]}">${x[1]}</button>`).join('')}<button type="button" class="late ${a?.late?'on':''}" ${st!=='present'?'disabled':''} data-late="${i}">R</button></div>`}).join(''):'<div class="muted" style="padding:18px 0">Aucune joueuse. Ajoute-les dans « Équipe ».</div>';
- document.querySelectorAll('.st').forEach(b=>b.onclick=()=>setStatus(players[+b.dataset.i].id,b.dataset.s));
- document.querySelectorAll('[data-late]').forEach(b=>b.onclick=()=>toggleLate(players[+b.dataset.late].id));
- renderStats();renderTeam();
+async function allPresent(){
+ try{
+  const s=await getSession(true);
+  const rows=players.map(p=>{const a=mark(p);return {session_id:s.id,player_id:p.id,status:'present',late:a?.status==='present'&&a?.late||false}});
+  const r=await db.from('attendance').upsert(rows,{onConflict:'session_id,player_id'}).select();
+  if(r.error)throw r.error;
+  marks=r.data||[];render();msg('✓ Toutes les présences sont enregistrées');loadStats();
+ }catch(e){console.error(e);msg('Erreur : '+e.message,'error')}
+}
+async function addPlayer(){
+ const name=$('newName').value.trim();if(!name)return;
+ try{
+  const r=await db.from('players').insert({team_id:teamId,name}).select().single();
+  if(r.error)throw r.error;
+  players.push(r.data);players.sort((a,b)=>a.name.localeCompare(b.name,'fr'));$('newName').value='';render();msg('✓ Joueuse ajoutée');
+ }catch(e){console.error(e);msg('Erreur : '+e.message,'error')}
+}
+async function loadStats(){
+ let r=await db.from('sessions').select('*').eq('team_id',teamId).order('session_date',{ascending:false});
+ if(r.error)return;
+ const ss=r.data||[]; if(!ss.length){$('stats').innerHTML='<div class="small">Aucune séance enregistrée.</div>';return}
+ const ids=ss.map(s=>s.id);
+ let ar=await db.from('attendance').select('*').in('session_id',ids);if(ar.error)return;
+ const all=ar.data||[];
+ let h='<table><tr><th>Date</th><th>Présentes</th><th>Retards</th><th>Abs. NC</th><th>Abs. exc.</th><th>Blessées</th></tr>';
+ ss.forEach(s=>{let x=all.filter(a=>a.session_id===s.id);h+=`<tr><td>${new Date(s.session_date+'T12:00:00').toLocaleDateString('fr-FR')}</td><td>${x.filter(a=>a.status==='present').length}</td><td>${x.filter(a=>a.status==='present'&&a.late).length}</td><td>${x.filter(a=>a.status==='absent').length}</td><td>${x.filter(a=>a.status==='excused').length}</td><td>${x.filter(a=>a.status==='injured').length}</td></tr>`});
+ h+='</table><p class="small">Le retard compte comme une présence.</p>'; $('stats').innerHTML=h;
 }
 
-function renderStats(){
- const sessionRows=sessions.slice().sort((a,b)=>String(a.session_date).localeCompare(String(b.session_date))).map(s=>{
-   const sessionAtt=attendance.filter(a=>a.session_id===s.id);
-   const present=sessionAtt.filter(a=>a.status==='present').length;
-   const late=sessionAtt.filter(a=>a.status==='present'&&a.late).length;
-   const label=new Date(s.session_date+'T00:00:00').toLocaleDateString('fr-FR');
-   return `<tr><td>${label}</td><td><b>${present}</b> / ${players.length}</td><td>${late}</td></tr>`;
- }).join('');
- $('sessionStatsBody').innerHTML=sessions.length?`<table><thead><tr><th>Date</th><th>Présentes</th><th>R</th></tr></thead><tbody>${sessionRows}</tbody></table>`:'<div class="muted">Aucune séance enregistrée.</div>';
- const rows=players.map(p=>{let pres=ret=an=ae=ab=0;sessions.forEach(s=>{const a=attendance.find(x=>x.session_id===s.id&&x.player_id===p.id);if(!a)return;if(a.status==='present'){pres++;if(a.late)ret++}else if(a.status==='absent')an++;else if(a.status==='excused')ae++;else if(a.status==='injured')ab++});const total=pres+an+ae+ab,abs=an+ae+ab,pct=total?Math.round(pres/total*100):0,cls=pct>=80?'good':pct>=60?'mid':'low';return `<tr><td><b>${esc(p.name)}</b></td><td>${pres}</td><td>${ret}</td><td>${an}</td><td>${ae}</td><td>${ab}</td><td><b>${abs}</b></td><td><span class="badge ${cls}">${pct}%</span></td></tr>`}).join('');
- $('statsBody').innerHTML=players.length?`<table><thead><tr><th>Joueuse</th><th>🟢</th><th>R</th><th>🔴</th><th>🟡</th><th>🔵</th><th>Abs.</th><th>%</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="muted">Aucune joueuse.</div>';
-}
-function renderTeam(){
- $('teamList').innerHTML=players.map((p,i)=>`<div class="item"><b>${esc(p.name)}</b><button class="danger del" data-i="${i}">Supprimer</button></div>`).join('');
- document.querySelectorAll('.del').forEach(b=>b.onclick=async()=>{const p=players[+b.dataset.i];if(!confirm('Supprimer '+p.name+' de '+current+' ?'))return;const r=await db.from('players').delete().eq('id',p.id);if(r.error)alert('Erreur : '+r.error.message);else await load()});
-}
-async function switchTeam(t){current=t;$('u11').classList.toggle('on',t==='U11F');$('u18').classList.toggle('on',t==='U18F');await load()}
-$('u11').onclick=()=>switchTeam('U11F');$('u18').onclick=()=>switchTeam('U18F');
-$('add').onclick=async()=>{const n=$('newName').value.trim();if(!n)return;const r=await db.from('players').insert({team_id:teamId(),name:n});if(r.error)alert('Erreur : '+r.error.message);else{$('newName').value='';await load()}};
-$('allPresentBtn').addEventListener('click', async (e)=>{
-  e.preventDefault();
-  const btn=$('allPresentBtn');
-  if(!players.length){alert('Aucune joueuse dans cette équipe.');return;}
-  btn.disabled=true;
-  btn.textContent='⏳ Enregistrement…';
-  try{
-    const session=await ensureSession();
-    const now=new Date().toISOString();
-    const rows=players.map(p=>{
-      const old=markFor(p);
-      return {session_id:session.id,player_id:p.id,status:'present',late:old?.status==='present' ? Boolean(old.late) : false,updated_at:now};
-    });
-    const r=await db.from('attendance').upsert(rows,{onConflict:'session_id,player_id'});
-    if(r.error) throw r.error;
-    rows.forEach(row=>{
-      const idx=attendance.findIndex(a=>a.session_id===row.session_id && a.player_id===row.player_id);
-      if(idx>=0) attendance[idx]={...attendance[idx],...row}; else attendance.push(row);
-    });
-    render();
-    btn.textContent='✅ Présentes : '+players.length;
-    sync('✓ '+players.length+' présences enregistrées');
-    setTimeout(()=>{btn.textContent='✅ Tout le monde présent';btn.disabled=false},1200);
-  }catch(e){
-    console.error(e);
-    alert('Impossible d’enregistrer les présences : '+(e?.message||String(e)));
-    btn.textContent='✅ Tout le monde présent';
-    btn.disabled=false;
-  }
+$('loginBtn').addEventListener('click',async()=>{
+ $('loginMsg').textContent='Connexion…';
+ const r=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+ if(r.error){$('loginMsg').textContent=r.error.message;$('loginMsg').className='error';return}
+ $('login').classList.add('hidden');$('app').classList.remove('hidden');load();
 });
-$('date').onchange=render;
-function tab(x){$('pageEm').hidden=x!=='em';$('pageStats').hidden=x!=='stats';$('pageTeam').hidden=x!=='team';$('tabEm').classList.toggle('on',x==='em');$('tabStats').classList.toggle('on',x==='stats');$('tabTeam').classList.toggle('on',x==='team')}
-$('tabEm').onclick=()=>tab('em');$('tabStats').onclick=()=>tab('stats');$('tabTeam').onclick=()=>tab('team');
-async function showApp(){
-  $('loginScreen').style.display='none';
-  $('app').classList.add('visible');
-}
+$('u11').addEventListener('click',async()=>{teamCode='U11F';marks=[];await load()});
+$('u18').addEventListener('click',async()=>{teamCode='U18F';marks=[];await load()});
+$('date').addEventListener('change',async()=>{selectedDate=$('date').value;await load()});
+$('all').addEventListener('click',allPresent);
+$('add').addEventListener('click',addPlayer);
+$('newName').addEventListener('keydown',e=>{if(e.key==='Enter')addPlayer()});
 
-async function startAfterLogin(){
-  if(started)return;
-  started=true;
-  await showApp();
-  await load();
-  setInterval(()=>{if(!document.hidden)load()},30000);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
-}
-
-$('loginForm').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const email=$('loginEmail').value.trim(), password=$('loginPassword').value;
-  if(!email||!password){
-    $('loginMsg').textContent='Renseigne ton e-mail et ton mot de passe.';
-    return;
-  }
-  $('loginBtn').disabled=true;
-  $('loginBtn').textContent='Connexion…';
-  $('loginMsg').textContent='';
-  $('loginMsg').style.color='';
-  try{
-    const r=await db.auth.signInWithPassword({email,password});
-    if(r.error) throw r.error;
-    $('loginMsg').textContent='Connexion réussie. Ouverture…';
-    $('loginMsg').style.color='#166534';
-    await startAfterLogin();
-  }catch(e){
-    console.error(e);
-    $('loginMsg').textContent='Connexion impossible : '+(e?.message||'Erreur inconnue');
-    $('loginMsg').style.color='#b91c1c';
-  }finally{
-    $('loginBtn').disabled=false;
-    $('loginBtn').textContent='Se connecter';
-  }
+db.auth.getSession().then(({data})=>{
+ if(data.session){$('login').classList.add('hidden');$('app').classList.remove('hidden');load()}
 });
-
-$('logoutBtn').onclick=async()=>{
-  await db.auth.signOut();
-  location.reload();
-};
-
-(async()=>{
-  const r=await db.auth.getSession();
-  if(r.data?.session) await startAfterLogin();
-})();
 </script>
 </body>
 </html>
