@@ -3,172 +3,316 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Émargement Basket — test</title>
+<title>Émargement Basket</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+*{box-sizing:border-box}
 body{font-family:Arial,sans-serif;background:#f5f5f5;margin:0;color:#222}
-main{max-width:650px;margin:30px auto;padding:15px}
-.card{background:white;border-radius:12px;padding:18px;margin-bottom:15px;box-shadow:0 2px 8px #0001}
-h1{text-align:center;font-size:24px}
-input{width:100%;padding:12px;margin:7px 0;box-sizing:border-box;font-size:16px}
-button{border:0;border-radius:9px;padding:12px 16px;font-size:16px;cursor:pointer}
-.primary{background:#111;color:#fff;width:100%}
-.teams{display:flex;gap:8px}.teams button{flex:1;background:#ddd;font-weight:bold}.teams .active{background:#111;color:#fff}
-.player{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eee;padding:10px 0;font-weight:bold}
-.present{background:#b9efc5;font-size:22px;width:52px;height:46px}
-.status{margin-top:10px;color:#666;font-size:14px}
-.error{color:#b00020}
-.hidden{display:none}
+main{max-width:900px;margin:0 auto;padding:18px}
+.card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 8px #0001}
+h1{text-align:center;margin:4px 0 18px;font-size:25px}
+h2{margin:0 0 12px}
+input{width:100%;padding:12px;border:1px solid #ccc;border-radius:9px;font-size:16px;margin:5px 0}
+button{border:0;border-radius:9px;padding:11px 14px;font-size:16px;cursor:pointer}
+.primary{background:#222;color:#fff;width:100%;margin-top:8px}
+.logout{float:right;background:#eee;font-size:13px;padding:7px 10px}
+.teams{display:flex;gap:8px;margin-bottom:14px}
+.teams button{flex:1;background:#ddd;font-weight:bold}
+.teams button.active{background:#222;color:#fff}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toolbar button{background:#eee}
+.date{width:auto;margin:0}
+.player{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #eee;padding:11px 0}
+.player:last-child{border-bottom:0}
+.name{font-weight:bold;flex:1}
+.statuses{display:flex;gap:5px;align-items:center}
+.st{width:44px;height:42px;padding:0;font-size:21px;background:#eee}
+.st.selected{outline:3px solid #222}
+.present{background:#b9eec5}
+.absent{background:#ffc2c2}
+.excused{background:#ffe89a}
+.injured{background:#b8dcff}
+.late{display:flex;align-items:center;gap:4px;font-size:13px;white-space:nowrap}
+.late input{width:18px;height:18px;margin:0}
+.muted{color:#666;font-size:14px}
+#app{display:none}
+#login{max-width:420px;margin:60px auto}
+#message{min-height:22px;text-align:center;margin:8px 0}
+.success{color:#16743a}.error{color:#a00000}
+.add{display:flex;gap:8px}.add input{margin:0}.add button{white-space:nowrap;background:#222;color:white}
 </style>
 </head>
 <body>
 <main>
-<div id="login" class="card">
-<h1>🏀 Émargement Basket</h1>
-<input id="email" type="email" placeholder="Email">
-<input id="password" type="password" placeholder="Mot de passe">
-<button id="loginBtn" class="primary" type="button" onclick="window.loginNow()">Se connecter</button>
-<div id="loginMsg" class="status"></div>
-</div>
+<section id="login" class="card">
+  <h1>🏀 Émargement Basket</h1>
+  <p class="muted">Connexion</p>
+  <input id="email" type="email" placeholder="Adresse e-mail" autocomplete="username">
+  <input id="password" type="password" placeholder="Mot de passe" autocomplete="current-password">
+  <button id="loginBtn" class="primary">Se connecter</button>
+  <div id="loginMsg"></div>
+</section>
 
-<div id="app" class="hidden">
-<div class="card">
-<h1>🏀 Émargement</h1>
-<div class="teams">
-<button id="u11">U11F</button>
-<button id="u18">U18F</button>
-</div>
-<div class="status" id="sync"></div>
-</div>
+<section id="app">
+  <button id="logoutBtn" class="logout">Déconnexion</button>
+  <h1>🏀 Émargement Basket</h1>
 
-<div class="card">
-<h2 id="teamTitle"></h2>
-<div id="players"></div>
-</div>
-</div>
+  <div class="teams">
+    <button id="u11Btn">U11F</button>
+    <button id="u18Btn">U18F</button>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <input id="date" class="date" type="date">
+      <button id="allPresent">🟢 Tout le monde présent</button>
+    </div>
+    <p id="sessionMsg" class="muted"></p>
+  </div>
+
+  <div class="card">
+    <h2 id="teamTitle">U11F</h2>
+    <div id="players"></div>
+    <div class="add">
+      <input id="newPlayer" type="text" placeholder="Ajouter une joueuse">
+      <button id="addPlayer">Ajouter</button>
+    </div>
+  </div>
+</section>
 </main>
 
 <script>
-const SUPABASE_URL='https://roqfjstasmlcfasmzjdk.supabase.co';
-const SUPABASE_KEY='sb_publishable_4dyWekEBF7mttdHt_6PqXw_mN-Mu4tA';
-const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const SUPABASE_URL = "https://roqfjstasmlcfasmzjdk.supabase.co";
+const SUPABASE_KEY = "sb_publishable_4dyWekEBF7mttdHt_6PqXw_mN-Mu4tA";
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let teamCode='U11F',teamId=null,players=[],sessionId=null,marks=[];
+const STATUS = {
+  present: "🟢",
+  absent: "🔴",
+  excused: "🟡",
+  injured: "🔵"
+};
 
-const $=id=>document.getElementById(id);
+let team = null;
+let players = [];
+let attendance = {};
+let session = null;
 
-function status(text,error=false){
-  $('sync').textContent=text;
-  $('sync').className='status'+(error?' error':'');
+const $ = id => document.getElementById(id);
+
+function today(){
+  const d = new Date();
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), day=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+$("date").value = today();
+
+function msg(text, ok=false){
+  $("sessionMsg").textContent=text;
+  $("sessionMsg").className=ok ? "success" : "muted";
 }
 
-async function getTeam(){
-  const r=await db.from('teams').select('id,code').eq('code',teamCode).single();
-  if(r.error) throw r.error;
-  teamId=r.data.id;
-}
-
-async function getSession(){
-  const today=new Date().toISOString().slice(0,10);
-  const found=await db.from('sessions').select('id').eq('team_id',teamId).eq('session_date',today).eq('session_type','Entraînement').maybeSingle();
-  if(found.error) throw found.error;
-  if(found.data) return found.data.id;
-  const created=await db.from('sessions').insert({
-    team_id:teamId,session_date:today,session_type:'Entraînement'
-  }).select('id').single();
-  if(created.error) throw created.error;
-  return created.data.id;
-}
-
-async function load(){
-  try{
-    status('Chargement…');
-    await getTeam();
-    const p=await db.from('players').select('id,name').eq('team_id',teamId).order('name');
-    if(p.error) throw p.error;
-    players=p.data||[];
-    sessionId=await getSession();
-    const a=await db.from('attendance').select('id,player_id,status,late').eq('session_id',sessionId);
-    if(a.error) throw a.error;
-    marks=a.data||[];
-    render();
-    status('✓ Chargé');
-  }catch(e){
-    console.error(e);
-    status('Erreur : '+e.message,true);
+async function login(){
+  $("loginMsg").textContent="Connexion…";
+  const {error}=await db.auth.signInWithPassword({
+    email:$("email").value.trim(),
+    password:$("password").value
+  });
+  if(error){
+    $("loginMsg").textContent=error.message;
+    $("loginMsg").className="error";
+  }else{
+    $("loginMsg").textContent="";
+    showApp();
   }
+}
+
+async function logout(){
+  await db.auth.signOut();
+  $("app").style.display="none";
+  $("login").style.display="block";
+}
+
+async function showApp(){
+  $("login").style.display="none";
+  $("app").style.display="block";
+  await loadTeam("U11F");
+}
+
+async function loadTeam(code){
+  const {data,error}=await db.from("teams").select("*").eq("code",code).maybeSingle();
+  if(error){ msg("Erreur équipe : "+error.message); return; }
+  if(!data){ msg("Équipe "+code+" introuvable."); return; }
+  team=data;
+  $("u11Btn").classList.toggle("active",code==="U11F");
+  $("u18Btn").classList.toggle("active",code==="U18F");
+  $("teamTitle").textContent=code;
+  await loadPlayers();
+  await loadSession();
+}
+
+async function loadPlayers(){
+  const {data,error}=await db.from("players").select("*").eq("team_id",team.id).order("name",{ascending:true});
+  if(error){msg("Erreur joueuses : "+error.message);return;}
+  players=data||[];
+  render();
+}
+
+async function loadSession(){
+  attendance={};
+  const date=$("date").value;
+  let {data,error}=await db.from("sessions")
+    .select("*")
+    .eq("team_id",team.id)
+    .eq("date",date)
+    .eq("session_type","Entraînement")
+    .maybeSingle();
+
+  if(error){msg("Erreur séance : "+error.message);return;}
+
+  if(!data){
+    const ins=await db.from("sessions").insert({
+      team_id:team.id,date:date,session_type:"Entraînement"
+    }).select().single();
+    if(ins.error){msg("Erreur création séance : "+ins.error.message);return;}
+    data=ins.data;
+  }
+  session=data;
+
+  const a=await db.from("attendance").select("*").eq("session_id",session.id);
+  if(a.error){msg("Erreur émargement : "+a.error.message);return;}
+  (a.data||[]).forEach(x=>attendance[x.player_id]=x);
+  render();
+  msg("Séance du "+date.split("-").reverse().join("/")+" prête.",true);
 }
 
 function render(){
-  $('teamTitle').textContent=teamCode;
-  $('u11').classList.toggle('active',teamCode==='U11F');
-  $('u18').classList.toggle('active',teamCode==='U18F');
-  const box=$('players'); box.innerHTML='';
+  $("players").innerHTML="";
+  if(!players.length){
+    $("players").innerHTML='<p class="muted">Aucune joueuse dans cette équipe.</p>';
+    return;
+  }
+
   players.forEach(p=>{
-    const mark=marks.find(a=>a.player_id===p.id);
-    const row=document.createElement('div'); row.className='player';
-    const name=document.createElement('span'); name.textContent=p.name;
-    const b=document.createElement('button'); b.type='button'; b.className='present';
-    b.textContent=mark?.status==='present'?'✓':'🟢';
-    b.title='Présente';
-    b.addEventListener('click',()=>setPresent(p.id));
-    row.append(name,b); box.appendChild(row);
+    const a=attendance[p.id]||{status:null,late:false};
+    const row=document.createElement("div");
+    row.className="player";
+
+    const name=document.createElement("div");
+    name.className="name";
+    name.textContent=p.name;
+
+    const statuses=document.createElement("div");
+    statuses.className="statuses";
+
+    ["present","absent","excused","injured"].forEach(s=>{
+      const b=document.createElement("button");
+      b.type="button";
+      b.className=`st ${s} ${a.status===s?"selected":""}`;
+      b.textContent=STATUS[s];
+      b.title={present:"Présente",absent:"Absente non excusée",excused:"Absente excusée",injured:"Absente blessée"}[s];
+      b.addEventListener("click",()=>setStatus(p.id,s));
+      statuses.appendChild(b);
+    });
+
+    const late=document.createElement("label");
+    late.className="late";
+    late.innerHTML='<input type="checkbox"> R';
+    late.querySelector("input").checked=!!a.late;
+    late.querySelector("input").addEventListener("change",e=>setLate(p.id,e.target.checked));
+
+    statuses.appendChild(late);
+    row.append(name,statuses);
+    $("players").appendChild(row);
   });
 }
 
-async function setPresent(playerId){
-  status('Enregistrement…');
-  const old=marks.find(a=>a.player_id===playerId);
-  const payload={
-    session_id:sessionId,
-    player_id:playerId,
-    status:'present',
-    late:old?.status==='present' ? !!old.late : false
-  };
-  const r=await db.from('attendance').upsert(payload,{onConflict:'session_id,player_id'});
-  if(r.error){
-    console.error(r.error); status('Erreur : '+r.error.message,true); return;
-  }
-  if(old) Object.assign(old,payload);
-  else marks.push(payload);
+async function setStatus(playerId,status){
+  if(!session){msg("Aucune séance.");return;}
+  const old=attendance[playerId];
+  attendance[playerId]={...(old||{}),status};
   render();
-  status('✓ Présence enregistrée');
+
+  const {data,error}=await db.from("attendance").upsert({
+    session_id:session.id,
+    player_id:playerId,
+    status:status,
+    late:!!attendance[playerId].late
+  },{onConflict:"session_id,player_id"}).select();
+
+  if(error){
+    msg("Erreur d'enregistrement : "+error.message);
+    if(old) attendance[playerId]=old; else delete attendance[playerId];
+    render();
+    return;
+  }
+  if(data && data[0]) attendance[playerId]=data[0];
+  msg("Présence enregistrée.",true);
 }
 
-window.loginNow=async function(){
-  const m=$('loginMsg');
-  m.textContent='Connexion…';
-  m.className='status';
-  try{
-    const r=await db.auth.signInWithPassword({
-      email:$('email').value.trim(),
-      password:$('password').value
-    });
-    if(r.error){
-      m.textContent='Erreur : '+r.error.message;
-      m.className='status error';
-      return;
-    }
-    $('login').classList.add('hidden');
-    $('app').classList.remove('hidden');
-    await load();
-  }catch(e){
-    console.error(e);
-    m.textContent='Erreur : '+(e?.message||String(e));
-    m.className='status error';
+async function setLate(playerId,late){
+  if(!session)return;
+  const old=attendance[playerId];
+  if(!old || !old.status){
+    msg("Choisis d'abord un statut.");
+    render();
+    return;
   }
-};
+  attendance[playerId]={...old,late};
+  const {data,error}=await db.from("attendance").upsert({
+    session_id:session.id,
+    player_id:playerId,
+    status:old.status,
+    late
+  },{onConflict:"session_id,player_id"}).select();
+  if(error){msg("Erreur : "+error.message);return;}
+  if(data && data[0]) attendance[playerId]=data[0];
+  msg("Retard enregistré.",true);
+}
 
-$('u11').addEventListener('click',async()=>{teamCode='U11F';await load()});
-$('u18').addEventListener('click',async()=>{teamCode='U18F';await load()});
-
-db.auth.getSession().then(({data})=>{
-  if(data.session){
-    $('login').classList.add('hidden');
-    $('app').classList.remove('hidden');
-    load();
+async function allPresent(){
+  if(!session)return;
+  msg("Enregistrement…");
+  for(const p of players){
+    const old=attendance[p.id];
+    const {data,error}=await db.from("attendance").upsert({
+      session_id:session.id,
+      player_id:p.id,
+      status:"present",
+      late:!!(old&&old.late)
+    },{onConflict:"session_id,player_id"}).select();
+    if(error){msg("Erreur : "+error.message);return;}
+    if(data&&data[0])attendance[p.id]=data[0];
   }
-});
+  render();
+  msg("Tout le monde est marqué présent.",true);
+}
+
+async function addPlayer(){
+  const name=$("newPlayer").value.trim();
+  if(!name){return;}
+  const {error}=await db.from("players").insert({team_id:team.id,name});
+  if(error){msg("Erreur ajout : "+error.message);return;}
+  $("newPlayer").value="";
+  await loadPlayers();
+  msg(name+" a été ajoutée.",true);
+}
+
+$("loginBtn").addEventListener("click",login);
+$("password").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
+$("logoutBtn").addEventListener("click",logout);
+$("u11Btn").addEventListener("click",()=>loadTeam("U11F"));
+$("u18Btn").addEventListener("click",()=>loadTeam("U18F"));
+$("date").addEventListener("change",loadSession);
+$("allPresent").addEventListener("click",allPresent);
+$("addPlayer").addEventListener("click",addPlayer);
+$("newPlayer").addEventListener("keydown",e=>{if(e.key==="Enter")addPlayer()});
+
+(async()=>{
+  const {data}=await db.auth.getSession();
+  if(data.session) showApp();
+  else $("login").style.display="block";
+})();
 </script>
 </body>
 </html>
