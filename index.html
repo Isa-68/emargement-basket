@@ -35,14 +35,15 @@ button{border:0;border-radius:9px;padding:11px 14px;font-size:16px;cursor:pointe
 .stats-table{width:100%;border-collapse:collapse;margin-top:10px}
 .stats-table th,.stats-table td{padding:9px 6px;border-bottom:1px solid #eee;text-align:center}
 .stats-table th:first-child,.stats-table td:first-child{text-align:left}
-@media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}.stats-table{font-size:13px}.stats-table th,.stats-table td{padding:7px 3px}}
+@media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}.stats-table{font-size:13px}.stats-table th,.stats-table td{padding:7px 3px}.player{gap:6px}.name{flex:0 0 72px;min-width:72px}.st{width:34px;height:38px;font-size:18px}.statuses{gap:3px}.observation{min-width:90px;max-width:none;padding:8px 7px;font-size:14px}}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .toolbar button{background:#eee}
 .date{width:auto;margin:0}
 .player{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #eee;padding:11px 0}
 .player:last-child{border-bottom:0}
-.name{font-weight:bold;flex:1}
+.name{font-weight:bold;min-width:80px;flex:0 0 110px}
 .statuses{display:flex;gap:5px;align-items:center}
+.observation{flex:1;min-width:100px;max-width:220px;margin:0;padding:9px 10px;font-size:14px}
 .st{width:44px;height:42px;padding:0;font-size:21px;background:#eee}
 .st.selected{outline:3px solid #222}
 .present{background:#b9eec5}
@@ -373,7 +374,7 @@ function render(){
   }
 
   players.forEach(p=>{
-    const a=attendance[p.id]||{status:null,late:false};
+    const a=attendance[p.id]||{status:null,late:false,observation:""};
     const row=document.createElement("div");
     row.className="player";
 
@@ -401,7 +402,14 @@ function render(){
     late.querySelector("input").addEventListener("change",e=>setLate(p.id,e.target.checked));
 
     statuses.appendChild(late);
-    row.append(name,statuses);
+
+    const observation=document.createElement("input");
+    observation.type="text";
+    observation.className="observation";
+    observation.placeholder="Observation";
+    observation.value=a.observation||"";
+    observation.addEventListener("change",()=>saveObservation(p.id,observation.value));
+    row.append(name,statuses,observation);
     $("players").appendChild(row);
   });
 }
@@ -421,7 +429,8 @@ async function setStatus(playerId,status){
     session_id:session.id,
     player_id:playerId,
     status:status,
-    late:!!attendance[playerId].late
+    late:!!attendance[playerId].late,
+    observation:attendance[playerId].observation||""
   },{onConflict:"session_id,player_id"});
 
   if(error){
@@ -452,11 +461,41 @@ async function setLate(playerId,late){
     session_id:session.id,
     player_id:playerId,
     status:old.status,
-    late
+    late,
+    observation:old.observation||""
   },{onConflict:"session_id,player_id"});
   if(error){msg("Erreur : "+error.message);return;}
   msg("Retard enregistré.",true);
   if($("statsView").style.display!=="none") loadStats();
+}
+
+let observationTimers={};
+async function saveObservation(playerId,value){
+  const old=attendance[playerId];
+  if(!old || !old.status){
+    msg("Choisis d'abord un statut.");
+    render();
+    return;
+  }
+  attendance[playerId]={...old,observation:value};
+  clearTimeout(observationTimers[playerId]);
+  observationTimers[playerId]=setTimeout(async()=>{
+    try{
+      await ensureSession();
+      const {error}=await db.from("attendance").upsert({
+        session_id:session.id,
+        player_id:playerId,
+        status:attendance[playerId].status,
+        late:!!attendance[playerId].late,
+        observation:value
+      },{onConflict:"session_id,player_id"});
+      if(error) throw new Error(error.message);
+      msg("Observation enregistrée.",true);
+      if($("statsView").style.display!=="none") loadStats();
+    }catch(e){
+      msg("Erreur : "+e.message);
+    }
+  },250);
 }
 
 async function allPresent(){
@@ -486,7 +525,8 @@ async function allPresent(){
       session_id:session.id,
       player_id:p.id,
       status:"present",
-      late:!!a.late
+      late:!!a.late,
+      observation:a.observation||""
     },{onConflict:"session_id,player_id"});
     if(error){
       msg("Erreur : "+error.message);
@@ -584,7 +624,7 @@ async function loadStats(){
     allAttendance=[];
   }else{
     const a=await db.from("attendance")
-      .select("session_id,player_id,status,late")
+      .select("session_id,player_id,status,late,observation")
       .in("session_id",ids);
     if(a.error){
       $("teamStats").innerHTML='<p class="error">Erreur statistiques : '+a.error.message+'</p>';
@@ -702,7 +742,12 @@ function exportExcel(){
       "Absences non excusées": abs,
       "Absences excusées": exc,
       "Absences blessées": inj,
-      "% présence": pct==="" ? "" : pct+"%"
+      "% présence": pct==="" ? "" : pct+"%",
+      "Observations": mine.filter(a=>a.observation).map(a=>{
+        const sess=allSessions.find(s=>s.id===a.session_id);
+        const d=sess ? sess.session_date.split("-").reverse().join("/") : "";
+        return d+" : "+a.observation;
+      }).join(" | ")
     };
   });
 
